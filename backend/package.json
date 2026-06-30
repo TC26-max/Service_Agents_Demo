@@ -1,0 +1,10 @@
+{
+  "name": "nimbus-rag-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Full-semantic RAG backend (embeddings + cosine) for the Nimbus assistants",
+  "scripts": {
+    "ingest": "node ingest.mjs"
+  }
+}

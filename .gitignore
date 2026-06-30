@@ -1,0 +1,19 @@
+# Dependencies & build
+node_modules/
+.vercel/
+dist/
+build/
+
+# Python
+__pycache__/
+*.pyc
+
+# Generated / local
+kb-embeddings.json
+*.log
+.DS_Store
+
+# Secrets (never commit keys)
+.env
+.env.*
+*.key

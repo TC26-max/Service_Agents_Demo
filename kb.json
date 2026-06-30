@@ -1,0 +1,78 @@
+[
+  {
+    "id": "pricing", "title": "Pricing & Plans", "cat": "Billing", "updated": "2026-06-01",
+    "chunks": [
+      { "id": "pricing.free", "heading": "Free plan", "text": "The Free plan is $0 and supports up to 5 users, 3 active projects, basic tasks and lists, and 100 MB of storage. It includes community support. Teams can upgrade to Pro at any time." },
+      { "id": "pricing.pro", "heading": "Pro plan", "text": "Pro is $12 per user/month billed annually, or $14 month-to-month. It includes unlimited projects, dashboards, timeline and Gantt views, 25 GB storage per user, the core integrations, 50 automation runs per month, and email support." },
+      { "id": "pricing.business", "heading": "Business plan", "text": "Business is $22 per user/month billed annually, or $26 month-to-month. It includes everything in Pro plus unlimited automations, workload management, custom fields, guest access, SSO with Google or Microsoft, admin controls, 100 GB storage per user, and priority support." },
+      { "id": "pricing.enterprise", "heading": "Enterprise plan", "text": "Enterprise uses custom pricing. It adds SAML SSO with SCIM provisioning, audit logs, a 99.9% uptime SLA, a dedicated customer success manager, onboarding and training, and optional SOC 2, GDPR, and HIPAA add-ons. Contact sales for a quote." },
+      { "id": "pricing.discounts", "heading": "Billing cycle & discounts", "text": "Annual billing is discounted versus monthly, roughly two months free. Published discounts are limited to the annual discount and a 30% discount for verified nonprofits and educational institutions. No other discounts are offered." }
+    ]
+  },
+  {
+    "id": "billing", "title": "Billing & Refunds", "cat": "Billing", "updated": "2026-05-20",
+    "chunks": [
+      { "id": "billing.refunds", "heading": "Refund policy", "text": "Paid plans (Pro and Business) are refundable within 14 days of a charge. Refunds requested after 14 days are not covered by the standard policy and are reviewed case by case by the billing team." },
+      { "id": "billing.proration", "heading": "Downgrades & credit", "text": "When you downgrade an annual plan, the unused balance is applied as prorated account credit toward future invoices." },
+      { "id": "billing.invoices", "heading": "Invoices & receipts", "text": "Invoices and receipts are available under Settings, Billing, Invoices. Workspace owners and billing admins can download a PDF invoice for any past charge." },
+      { "id": "billing.trial", "heading": "Free trial", "text": "New teams can start a 14-day free trial of the Business plan. No credit card is required to begin the trial." },
+      { "id": "billing.payment", "heading": "Payment methods", "text": "Nimbus accepts major credit cards. Payment changes are made by the workspace owner under Settings, Billing. Support agents never collect or process card details." }
+    ]
+  },
+  {
+    "id": "security", "title": "Security & Compliance", "cat": "Security", "updated": "2026-06-10",
+    "chunks": [
+      { "id": "security.certs", "heading": "Certifications", "text": "Nimbus is SOC 2 Type II certified and GDPR compliant. A current SOC 2 report is available to customers under NDA on request." },
+      { "id": "security.encryption", "heading": "Encryption", "text": "All customer data is encrypted at rest with AES-256 and in transit with TLS 1.2 or higher." },
+      { "id": "security.hipaa", "heading": "HIPAA", "text": "HIPAA support, including a signed BAA, is available as an Enterprise add-on. It is not available on the Free, Pro, or Business plans." },
+      { "id": "security.residency", "heading": "Data residency", "text": "Data is hosted in the United States by default. EU data residency is available on Enterprise." },
+      { "id": "security.access", "heading": "Access & audit", "text": "Access to production systems is restricted, logged, and reviewed. Audit logs of workspace activity are available on Enterprise." }
+    ]
+  },
+  {
+    "id": "integrations", "title": "Integrations", "cat": "Product", "updated": "2026-04-15",
+    "chunks": [
+      { "id": "integrations.list", "heading": "Available integrations", "text": "Nimbus integrates with Slack, Microsoft Teams, Google Workspace (Drive and Calendar), GitHub, GitLab, Jira (import), Zapier, Zoom, and Figma." },
+      { "id": "integrations.connect", "heading": "Connecting an integration", "text": "To connect an integration, go to Settings, Integrations, choose the app, and authorize it. Most integrations require a workspace admin to approve the connection." },
+      { "id": "integrations.slack", "heading": "Slack troubleshooting", "text": "If Slack notifications stop arriving, check Settings, Integrations, Slack. If it shows Reauthorize, the token expired, often after a Slack permission change; click Reauthorize and approve in Slack to restore it." },
+      { "id": "integrations.api", "heading": "API & webhooks", "text": "A REST API and webhooks are available on Pro and above for building custom integrations." }
+    ]
+  },
+  {
+    "id": "accounts", "title": "Accounts, SSO & Admin", "cat": "Accounts", "updated": "2026-05-30",
+    "chunks": [
+      { "id": "accounts.login", "heading": "Login & password reset", "text": "If you cannot sign in, use the self-service password reset at nimbushq.example/reset. A reset link is emailed to the address on file." },
+      { "id": "accounts.sso", "heading": "Single sign-on", "text": "On Business, SSO with Google or Microsoft is configured by a workspace admin under Settings, Security. On Enterprise, SAML SSO and SCIM provisioning are available." },
+      { "id": "accounts.roles", "heading": "Roles & permissions", "text": "Members can be assigned roles: owner, admin, member, or guest. Only owners and admins can change billing, manage members, or change workspace settings." },
+      { "id": "accounts.ownership", "heading": "Ownership transfer", "text": "Transferring workspace ownership is a sensitive change. For security it is completed by the support team after verifying the current owner out-of-band; it is not performed in chat." },
+      { "id": "accounts.seats", "heading": "Managing seats", "text": "Admins can add or remove seats under Settings, Members. Adding seats may change the amount of the next invoice." }
+    ]
+  },
+  {
+    "id": "data", "title": "Data Export & Portability", "cat": "Product", "updated": "2026-05-05",
+    "chunks": [
+      { "id": "data.export", "heading": "Exporting data", "text": "All paid plans can export data to CSV or JSON from any project or list. A full account export across all workspaces is available on Business and Enterprise." },
+      { "id": "data.portability", "heading": "What is included", "text": "Exports include tasks, comments, custom fields, and attachment metadata. Large exports are emailed as a downloadable archive when ready." },
+      { "id": "data.deletion", "heading": "Data deletion requests", "text": "To request deletion of your data under GDPR or similar laws, contact support; these requests are handled by the privacy team and are not processed in chat." }
+    ]
+  },
+  {
+    "id": "support", "title": "Support & SLAs", "cat": "Support", "updated": "2026-06-18",
+    "chunks": [
+      { "id": "support.channels", "heading": "Support channels", "text": "Support is available by email on Pro, with priority support on Business and a dedicated CSM on Enterprise. The Free plan uses community support." },
+      { "id": "support.sla", "heading": "Response-time SLAs", "text": "Business priority support targets a first response within 4 business hours. Enterprise targets within 1 hour and includes a 99.9% uptime SLA. Free and Pro do not carry a specific response-time SLA." },
+      { "id": "support.escalation", "heading": "Escalation & tickets", "text": "Issues that cannot be resolved immediately are escalated with a ticket in the format NIM- followed by five digits. Account security, suspected fraud, data loss, and legal or privacy requests are escalated as priority to the appropriate team." },
+      { "id": "support.status", "heading": "Service status", "text": "Service status and incident history are published at status.nimbushq.example." }
+    ]
+  },
+  {
+    "id": "sales", "title": "Sales Playbook & Competitive", "cat": "Sales", "updated": "2026-06-22",
+    "chunks": [
+      { "id": "sales.differentiators", "heading": "Why Nimbus", "text": "Nimbus positions on fast setup, a powerful automation engine, transparent published pricing, and highly rated support. Specific advantages are demonstrated in a live demo rather than asserted as rankings." },
+      { "id": "sales.competitors", "heading": "Competitive positioning", "text": "When asked about Asana, Monday, ClickUp, Trello, or Notion, agents stay respectful and focus on what Nimbus does. They do not state competitor pricing or feature limitations, which may be inaccurate or out of date." },
+      { "id": "sales.roi", "heading": "Typical value", "text": "Teams adopt Nimbus to consolidate projects, dashboards, and automations in one place and to reduce manual status-tracking work. The free 14-day Business trial lets a team validate the fit before buying." },
+      { "id": "sales.fit", "heading": "Who it fits", "text": "Nimbus fits SMB to mid-market teams in marketing, product, operations, agencies, and software. Very large or highly regulated deployments are routed to Enterprise sales." },
+      { "id": "sales.convert", "heading": "Next steps", "text": "The two next steps are a 30-minute demo or the 14-day Business trial. To book a demo, sales captures name, work email, company, team size, and primary use case; a rep then emails to confirm a time." }
+    ]
+  }
+]
