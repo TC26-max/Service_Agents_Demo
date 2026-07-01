@@ -661,14 +661,17 @@ function speak(text){ if(!voiceOut||!("speechSynthesis" in window)) return; try{
 function stopSpeaking(){ try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){} }
 function setVoiceOut(on){ voiceOut=on; const b=$("voiceBtn"); if(b){ b.textContent=on?"🔊":"🔇"; b.classList.toggle("on",on); b.title=on?"Answers are spoken — click to mute":"Answers are muted — click to hear them aloud"; } if(!on) stopSpeaking(); }
 async function blobToWavBase64(blob){
-  const buf=await blob.arrayBuffer();
-  const AC=window.AudioContext||window.webkitAudioContext; const ctx=new AC();
-  const ab=await ctx.decodeAudioData(buf); if(ctx.close) ctx.close();
-  const len=ab.length, mono=new Float32Array(len);
-  for(let c=0;c<ab.numberOfChannels;c++){ const d=ab.getChannelData(c); for(let i=0;i<len;i++) mono[i]+=d[i]/ab.numberOfChannels; }
-  const sr=ab.sampleRate, out=new ArrayBuffer(44+len*2), v=new DataView(out);
+  const raw=await blob.arrayBuffer();
+  const AC=window.AudioContext||window.webkitAudioContext; const dctx=new AC();
+  const decoded=await dctx.decodeAudioData(raw); if(dctx.close) dctx.close();
+  const SR=16000, frames=Math.max(1,Math.floor(decoded.duration*SR));   // resample to 16kHz mono (smaller, faster, ideal for speech)
+  const oac=new OfflineAudioContext(1, frames, SR);
+  const src=oac.createBufferSource(); src.buffer=decoded; src.connect(oac.destination); src.start();
+  const rendered=await oac.startRendering();
+  const mono=rendered.getChannelData(0), len=mono.length;
+  const out=new ArrayBuffer(44+len*2), v=new DataView(out);
   const ws=(o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
-  ws(0,"RIFF"); v.setUint32(4,36+len*2,true); ws(8,"WAVE"); ws(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); ws(36,"data"); v.setUint32(40,len*2,true);
+  ws(0,"RIFF"); v.setUint32(4,36+len*2,true); ws(8,"WAVE"); ws(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,SR,true); v.setUint32(28,SR*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); ws(36,"data"); v.setUint32(40,len*2,true);
   let off=44; for(let i=0;i<len;i++){ let s=Math.max(-1,Math.min(1,mono[i])); v.setInt16(off,s<0?s*0x8000:s*0x7FFF,true); off+=2; }
   const bytes=new Uint8Array(out); let bin=""; for(let i=0;i<bytes.length;i+=0x8000) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
   return btoa(bin);
@@ -681,17 +684,20 @@ async function blobToWavBase64(blob){
   let recording=false, mr=null, chunks=[], stream=null, cap=null;
   const reset=()=>{ recording=false; mic.classList.remove("listening"); input.placeholder="Ask a question…"; clearTimeout(cap); if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } };
   const micError=(msg)=>{ reset(); addUserOrBot("bot", msg); };
-  async function transcribe(blob){
+  async function transcribe(blob, attempt){
     input.placeholder="Transcribing…";
-    try{
-      const wav=await blobToWavBase64(blob);
-      const r=await fetch("/api/transcribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:wav, mime:"audio/wav"})});
-      const j=await r.json().catch(()=>({})); input.placeholder="Ask a question…";
-      if(!r.ok||j.error){ addUserOrBot("bot","Sorry — I couldn't transcribe that just now. Please try again, or type your question."); return; }
-      const text=(j.text||"").trim();
-      if(!text){ addUserOrBot("bot","I didn't catch any speech — tap 🎙, speak, then tap it again."); return; }
-      input.value=text; setVoiceOut(true); send();
-    }catch(e){ input.placeholder="Ask a question…"; addUserOrBot("bot","Voice transcription failed — you can type instead."); }
+    let wav; try{ wav=await blobToWavBase64(blob); }catch(e){ input.placeholder="Ask a question…"; addUserOrBot("bot","Couldn't process the recording — please try again, or type your question."); return; }
+    let r,j;
+    try{ r=await fetch("/api/transcribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:wav, mime:"audio/wav"})}); j=await r.json().catch(()=>({})); }
+    catch(e){ input.placeholder="Ask a question…"; addUserOrBot("bot","Couldn't reach the transcription service — please try again."); return; }
+    if(r.ok && !j.error){ const text=(j.text||"").trim(); input.placeholder="Ask a question…";
+      if(!text){ addUserOrBot("bot","I didn't catch any speech — tap 🎙, speak clearly, then tap it again."); return; }
+      input.value=text; setVoiceOut(true); send(); return; }
+    const err=String(j.error||("HTTP "+r.status)); const rl=/429|quota|rate|RESOURCE_EXHAUSTED/i.test(err);
+    if(rl && !attempt){ await new Promise(s=>setTimeout(s,2600)); return transcribe(blob,1); }  // auto-retry once on a rate-limit blip
+    input.placeholder="Ask a question…";
+    if(rl){ addUserOrBot("bot","⏳ The free AI quota just hit its per-minute limit. Wait a few seconds, then tap 🎙 again."); }
+    else { addUserOrBot("bot","Sorry — transcription failed ("+err.slice(0,90)+"). Please try again, or type your question."); }
   }
   mic.onclick=async ()=>{
     if(recording){ try{ mr.stop(); }catch(e){} return; } // tap again to stop + transcribe
