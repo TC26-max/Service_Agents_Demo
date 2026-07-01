@@ -664,6 +664,7 @@ function setVoiceOut(on){ voiceOut=on; const b=$("voiceBtn"); if(b){ b.textConte
 (function(){ const vb=$("voiceBtn"); if(vb) vb.onclick=()=>setVoiceOut(!voiceOut);
   const mic=$("mic"); if(!mic) return;
   if(!_SR){ mic.style.display="none"; return; }   // speech recognition unsupported (e.g., Firefox) -> hide mic
+  if(navigator.mediaDevices&&navigator.mediaDevices.enumerateDevices){ navigator.mediaDevices.enumerateDevices().then(ds=>{ if(!ds.some(d=>d.kind==="audioinput")){ mic.disabled=true; mic.style.opacity="0.4"; mic.style.cursor="not-allowed"; mic.title="No microphone detected — open on a laptop or phone to talk"; } }).catch(()=>{}); }  // no mic device -> disable the button instead of leaving a dead one
   let rec=null, listening=false;
   const endListen=()=>{ listening=false; mic.classList.remove("listening"); input.placeholder="Ask a question…"; };
   const micError=(msg)=>{ endListen(); addUserOrBot("bot", msg); };
