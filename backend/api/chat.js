@@ -34,7 +34,7 @@ const PERSONA = {
 const PRESETS = {
   openai:  { base: "https://api.openai.com/v1",                                chat: "gpt-4o-mini",          embed: "text-embedding-3-small" },
   mistral: { base: "https://api.mistral.ai/v1",                                chat: "mistral-small-latest", embed: "mistral-embed" },
-  gemini:  { base: "https://generativelanguage.googleapis.com/v1beta/openai",  chat: "gemini-2.5-flash,gemini-2.0-flash-lite,gemini-2.5-flash-lite,gemini-1.5-flash,gemini-1.5-flash-8b", embed: "gemini-embedding-001" }
+  gemini:  { base: "https://generativelanguage.googleapis.com/v1beta/openai",  chat: "gemini-2.5-flash-lite,gemini-2.5-flash", embed: "gemini-embedding-001" }
 };
 const PROVIDER = (process.env.PROVIDER || "openai").toLowerCase();
 const P = PRESETS[PROVIDER] || PRESETS.openai;
@@ -79,25 +79,23 @@ async function getCorpusEmbeddings() {
   EMB_CACHE = FLAT.map((c, i) => ({ cid: c.cid, vector: vecs[i] }));
   return EMB_CACHE;
 }
-async function chat(system, messages, max = 800) {
+async function chat(system, messages, max = 400) {
   const payload = (model) => JSON.stringify({ model, temperature: 0.3, max_tokens: max, messages: [{ role: "system", content: system }, ...messages] });
+  const live = CHAT_MODELS.filter(m => !DEAD.has(m));
   let lastErr = "";
-  for (let pass = 0; pass < 2; pass++) {
-    const live = CHAT_MODELS.filter(m => !DEAD.has(m));
-    if (!live.length) break;
-    for (let k = 0; k < live.length; k++) {
-      const model = live[(RR + k) % live.length];
-      let r;
-      try {
-        r = await fetch(API_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + KEY }, body: payload(model) });
-      } catch (e) { lastErr = "chat fetch error (" + model + "): " + e; continue; }
-      if (r.ok) { RR = (RR + k + 1) % live.length; return (await r.json()).choices[0].message.content; } // rotate cursor so the next question starts on a different model
-      const body = (await r.text()).slice(0, 400);
-      lastErr = "chat " + r.status + " (" + model + ") " + body;
-      if (r.status === 404 || /limit:\s*0/.test(body)) DEAD.add(model); // permanent — never retry this model
-      // 429 / 5xx are transient: just fall through to the next model in the list
-    }
-    if (pass === 0) await new Promise(s => setTimeout(s, 1200)); // brief pause, then one more full sweep
+  // Gentle: single pass. Stay on the current model; on a rate-limit/error switch to the next
+  // one (each model has its own free-tier quota). Avoids hammering many calls per message.
+  for (let tries = 0; tries < live.length; tries++) {
+    const model = live[RR % live.length];
+    let r;
+    try {
+      r = await fetch(API_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + KEY }, body: payload(model) });
+    } catch (e) { lastErr = "chat fetch error: " + e; RR = (RR + 1) % live.length; continue; }
+    if (r.ok) return (await r.json()).choices[0].message.content; // keep RR here so we reuse this working model next time
+    const body = (await r.text()).slice(0, 400);
+    lastErr = "chat " + r.status + " (" + model + ") " + body;
+    if (r.status === 404 || /limit:\s*0/.test(body)) DEAD.add(model);
+    RR = (RR + 1) % live.length; // switch to the next model for future calls
   }
   throw new Error(lastErr || "chat failed");
 }
@@ -127,13 +125,13 @@ export default async function handler(req, res) {
       const topFor = async (text, boost) => {
         const v = await embed(text);
         return corpus.map(e => ({ cid: e.cid, score: cosine(v, e.vector) * boost }))
-          .sort((a, b) => b.score - a.score).slice(0, 4);
+          .sort((a, b) => b.score - a.score).slice(0, 3);
       };
       const runs = [topFor(lastUser, 1.08)];                       // the current question, slightly favored
       if (qCtx && qCtx !== lastUser) runs.push(topFor(qCtx, 1.0)); // + conversation context for follow-ups
       const best = new Map();
       (await Promise.all(runs)).flat().forEach(x => { if (!best.has(x.cid) || x.score > best.get(x.cid)) best.set(x.cid, x.score); });
-      retr = [...best.entries()].sort((a, b) => b[1] - a[1]).slice(0, Math.max(TOPK, 5))
+      retr = [...best.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
         .map(([cid, score]) => ({ ...BYID[cid], score: +score.toFixed(4) }));
     }
     const sourcesBlock = retr.map((c, i) => `[S${i + 1}] (${c.docTitle} — ${c.heading}, updated ${c.updated})\n${c.text}`).join("\n\n");

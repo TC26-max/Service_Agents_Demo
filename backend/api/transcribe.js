@@ -1,7 +1,7 @@
 // Speech-to-text via Gemini (reliable, server-side) — replaces the flaky browser Web Speech API.
 // POST { audio: <base64 WAV>, mime: "audio/wav" }  ->  { text: "<transcript>" }
 const KEY = process.env.API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.OPENAI_API_KEY;
-const MODELS = (process.env.STT_MODEL || process.env.CHAT_MODEL || "gemini-2.5-flash,gemini-2.0-flash-lite,gemini-2.5-flash-lite,gemini-1.5-flash")
+const MODELS = (process.env.STT_MODEL || "gemini-2.5-flash-lite,gemini-2.5-flash")
   .split(",").map(s => s.trim()).filter(Boolean);
 const NATIVE = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEAD = new Set();
