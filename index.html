@@ -654,34 +654,61 @@ $("saveCfg").onclick=()=>{ cfg.provider=$("provider").value; cfg.key=$("apikey")
 
 selectBot("support"); setView("chat");
 
-/* ---- voice (Phase 1: browser Web Speech API — free, no backend) ---- */
+/* ---- voice: record + transcribe via Gemini (reliable; the browser Web Speech API fails with "network" in many setups) ---- */
 let voiceOut=false;
-const _SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 function stripForSpeech(t){ return t.replace(/\[S?\d+(?:\s*,\s*S?\d+)*\]/g,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/[#*_>]/g,"").replace(/\s+/g," ").trim(); }
 function speak(text){ if(!voiceOut||!("speechSynthesis" in window)) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(stripForSpeech(text)); u.rate=1.03; speechSynthesis.speak(u); }catch(e){} }
 function stopSpeaking(){ try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){} }
 function setVoiceOut(on){ voiceOut=on; const b=$("voiceBtn"); if(b){ b.textContent=on?"🔊":"🔇"; b.classList.toggle("on",on); b.title=on?"Answers are spoken — click to mute":"Answers are muted — click to hear them aloud"; } if(!on) stopSpeaking(); }
+async function blobToWavBase64(blob){
+  const buf=await blob.arrayBuffer();
+  const AC=window.AudioContext||window.webkitAudioContext; const ctx=new AC();
+  const ab=await ctx.decodeAudioData(buf); if(ctx.close) ctx.close();
+  const len=ab.length, mono=new Float32Array(len);
+  for(let c=0;c<ab.numberOfChannels;c++){ const d=ab.getChannelData(c); for(let i=0;i<len;i++) mono[i]+=d[i]/ab.numberOfChannels; }
+  const sr=ab.sampleRate, out=new ArrayBuffer(44+len*2), v=new DataView(out);
+  const ws=(o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+  ws(0,"RIFF"); v.setUint32(4,36+len*2,true); ws(8,"WAVE"); ws(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); ws(36,"data"); v.setUint32(40,len*2,true);
+  let off=44; for(let i=0;i<len;i++){ let s=Math.max(-1,Math.min(1,mono[i])); v.setInt16(off,s<0?s*0x8000:s*0x7FFF,true); off+=2; }
+  const bytes=new Uint8Array(out); let bin=""; for(let i=0;i<bytes.length;i+=0x8000) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+  return btoa(bin);
+}
 (function(){ const vb=$("voiceBtn"); if(vb) vb.onclick=()=>setVoiceOut(!voiceOut);
   const mic=$("mic"); if(!mic) return;
-  if(!_SR){ mic.style.display="none"; return; }   // speech recognition unsupported (e.g., Firefox) -> hide mic
-  if(navigator.mediaDevices&&navigator.mediaDevices.enumerateDevices){ navigator.mediaDevices.enumerateDevices().then(ds=>{ if(!ds.some(d=>d.kind==="audioinput")){ mic.disabled=true; mic.style.opacity="0.4"; mic.style.cursor="not-allowed"; mic.title="No microphone detected — open on a laptop or phone to talk"; } }).catch(()=>{}); }  // no mic device -> disable the button instead of leaving a dead one
-  let rec=null, listening=false;
-  const endListen=()=>{ listening=false; mic.classList.remove("listening"); input.placeholder="Ask a question…"; };
-  const micError=(msg)=>{ endListen(); addUserOrBot("bot", msg); };
-  mic.onclick=async ()=>{ if(listening){ try{rec.stop();}catch(e){} return; }
+  const canRecord=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
+  if(!canRecord){ mic.style.display="none"; return; }
+  if(navigator.mediaDevices.enumerateDevices){ const upd=()=>navigator.mediaDevices.enumerateDevices().then(ds=>{ const has=ds.some(d=>d.kind==="audioinput"); mic.disabled=!has; mic.style.opacity=has?"1":"0.4"; mic.style.cursor=has?"pointer":"not-allowed"; mic.title=has?"Speak your question":"No microphone detected — connect one (AirPods/USB mic) or open on a laptop/phone"; }).catch(()=>{}); upd(); try{ navigator.mediaDevices.ondevicechange=upd; }catch(e){} }
+  let recording=false, mr=null, chunks=[], stream=null, cap=null;
+  const reset=()=>{ recording=false; mic.classList.remove("listening"); input.placeholder="Ask a question…"; clearTimeout(cap); if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } };
+  const micError=(msg)=>{ reset(); addUserOrBot("bot", msg); };
+  async function transcribe(blob){
+    input.placeholder="Transcribing…";
+    try{
+      const wav=await blobToWavBase64(blob);
+      const r=await fetch("/api/transcribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:wav, mime:"audio/wav"})});
+      const j=await r.json().catch(()=>({})); input.placeholder="Ask a question…";
+      if(!r.ok||j.error){ addUserOrBot("bot","Sorry — I couldn't transcribe that just now. Please try again, or type your question."); return; }
+      const text=(j.text||"").trim();
+      if(!text){ addUserOrBot("bot","I didn't catch any speech — tap 🎙, speak, then tap it again."); return; }
+      input.value=text; setVoiceOut(true); send();
+    }catch(e){ input.placeholder="Ask a question…"; addUserOrBot("bot","Voice transcription failed — you can type instead."); }
+  }
+  mic.onclick=async ()=>{
+    if(recording){ try{ mr.stop(); }catch(e){} return; } // tap again to stop + transcribe
     stopSpeaking();
-    try{ const s=await navigator.mediaDevices.getUserMedia({audio:true}); s.getTracks().forEach(t=>t.stop()); } // trigger a clear permission prompt
+    try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }
     catch(err){ const n=(err&&err.name)||"";
-      if(n==="NotFoundError"||n==="OverconstrainedError"||n==="NotReadableError"){ micError("🎙️ No microphone was found on this device — desktops like a Mac Mini often have no built-in mic. Connect a microphone, or open the demo on a laptop or phone, then tap 🎙 again. You can always type instead — and the 🔊 button still reads answers aloud."); }
-      else if(n==="NotAllowedError"||n==="SecurityError"){ micError("🎙️ Microphone access is blocked. Click the mic or 🔒 icon in your browser's address bar, choose Allow, then tap 🎙 again."); }
-      else { micError("🎙️ Couldn't start the microphone ("+(n||"unknown")+"). You can type your question instead."); }
+      if(n==="NotFoundError"||n==="OverconstrainedError"||n==="NotReadableError"){ micError("🎙️ No microphone was found. Connect a mic (AirPods, USB mic, or headset), or open the demo on a laptop or phone, then tap 🎙 again."); }
+      else if(n==="NotAllowedError"||n==="SecurityError"){ micError("🎙️ Microphone access is blocked. Click the mic or 🔒 icon in the address bar, choose Allow, then tap 🎙 again."); }
+      else { micError("🎙️ Couldn't start the microphone ("+(n||"unknown")+"). You can type instead."); }
       return; }
-    try{ rec=new _SR(); }catch(e){ micError("Voice input isn't supported in this browser — try Chrome, Edge, or Safari."); return; }
-    rec.lang="en-US"; rec.interimResults=true; rec.maxAlternatives=1; listening=true; mic.classList.add("listening"); input.placeholder="Listening… (tap 🎙 to stop)"; let fin="";
-    rec.onresult=(e)=>{ let it=""; for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) fin+=r[0].transcript; else it+=r[0].transcript; } input.value=fin||it; input.style.height="auto"; input.style.height=Math.min(input.scrollHeight,130)+"px"; };
-    rec.onerror=(e)=>{ const er=(e&&e.error)||""; if(er==="not-allowed"||er==="service-not-allowed"){ micError("🎙️ Microphone access is blocked. Click the mic or 🔒 icon in the address bar, allow it, then tap 🎙 again."); } else if(er==="no-speech"){ micError("I didn't catch that — tap 🎙 and try again."); } else { endListen(); } };
-    rec.onend=()=>{ endListen(); const t=input.value.trim(); if(t){ setVoiceOut(true); send(); } };
-    try{ rec.start(); }catch(e){ endListen(); }
+    try{ mr=new MediaRecorder(stream); }catch(e){ micError("Recording isn't supported in this browser — try Chrome or Safari."); return; }
+    chunks=[];
+    mr.ondataavailable=(e)=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+    mr.onstop=()=>{ const blob=new Blob(chunks,{type:(mr&&mr.mimeType)||"audio/webm"}); reset(); if(blob.size>1500) transcribe(blob); else addUserOrBot("bot","I didn't catch any speech — tap 🎙, speak, then tap it again."); };
+    recording=true; mic.classList.add("listening"); input.placeholder="Recording… tap 🎙 to stop";
+    try{ mr.start(); }catch(e){ micError("Couldn't start recording."); return; }
+    cap=setTimeout(()=>{ if(recording){ try{ mr.stop(); }catch(e){} } }, 15000); // 15s safety cap
   };
 })();
 
