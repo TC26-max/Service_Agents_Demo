@@ -34,7 +34,7 @@ const PERSONA = {
 const PRESETS = {
   openai:  { base: "https://api.openai.com/v1",                                chat: "gpt-4o-mini",          embed: "text-embedding-3-small" },
   mistral: { base: "https://api.mistral.ai/v1",                                chat: "mistral-small-latest", embed: "mistral-embed" },
-  gemini:  { base: "https://generativelanguage.googleapis.com/v1beta/openai",  chat: "gemini-2.5-flash,gemini-2.0-flash-lite,gemini-2.5-flash-lite,gemini-1.5-flash", embed: "gemini-embedding-001" }
+  gemini:  { base: "https://generativelanguage.googleapis.com/v1beta/openai",  chat: "gemini-2.5-flash,gemini-2.0-flash-lite,gemini-2.5-flash-lite,gemini-1.5-flash,gemini-1.5-flash-8b", embed: "gemini-embedding-001" }
 };
 const PROVIDER = (process.env.PROVIDER || "openai").toLowerCase();
 const P = PRESETS[PROVIDER] || PRESETS.openai;
@@ -42,8 +42,9 @@ const API_BASE = (process.env.API_BASE || P.base).replace(/\/$/, "");
 const KEY = process.env.API_KEY || process.env.OPENAI_API_KEY || process.env.MISTRAL_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 const EMBED_MODEL = process.env.EMBED_MODEL || P.embed;
 const CHAT_MODEL = process.env.CHAT_MODEL || P.chat;
-const CHAT_MODELS = CHAT_MODEL.split(",").map(s => s.trim()).filter(Boolean); // try in order; first that works is cached
-let WORKING_CHAT = null;
+const CHAT_MODELS = CHAT_MODEL.split(",").map(s => s.trim()).filter(Boolean); // rotated across to spread free-tier load
+const DEAD = new Set(); // models with zero quota / not found — skipped permanently
+let RR = 0;             // round-robin cursor across models
 const TOPK = parseInt(process.env.TOP_K || "4", 10);
 
 async function embed(text) {
@@ -79,22 +80,24 @@ async function getCorpusEmbeddings() {
   return EMB_CACHE;
 }
 async function chat(system, messages, max = 800) {
-  const models = WORKING_CHAT ? [WORKING_CHAT] : CHAT_MODELS;
+  const payload = (model) => JSON.stringify({ model, temperature: 0.3, max_tokens: max, messages: [{ role: "system", content: system }, ...messages] });
   let lastErr = "";
-  for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const r = await fetch(API_BASE + "/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + KEY },
-        body: JSON.stringify({ model, temperature: 0.3, max_tokens: max, messages: [{ role: "system", content: system }, ...messages] })
-      });
-      if (r.ok) { WORKING_CHAT = model; return (await r.json()).choices[0].message.content; }
-      const body = (await r.text()).slice(0, 600);
+  for (let pass = 0; pass < 2; pass++) {
+    const live = CHAT_MODELS.filter(m => !DEAD.has(m));
+    if (!live.length) break;
+    for (let k = 0; k < live.length; k++) {
+      const model = live[(RR + k) % live.length];
+      let r;
+      try {
+        r = await fetch(API_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + KEY }, body: payload(model) });
+      } catch (e) { lastErr = "chat fetch error (" + model + "): " + e; continue; }
+      if (r.ok) { RR = (RR + k + 1) % live.length; return (await r.json()).choices[0].message.content; } // rotate cursor so the next question starts on a different model
+      const body = (await r.text()).slice(0, 400);
       lastErr = "chat " + r.status + " (" + model + ") " + body;
-      if (r.status === 404 || /limit:\s*0/.test(body)) break;                       // model unavailable / zero free quota -> next model
-      if (r.status === 429 && attempt === 0) { await new Promise(s => setTimeout(s, 3000)); continue; } // transient -> one retry
-      break;                                                                          // other error -> next model
+      if (r.status === 404 || /limit:\s*0/.test(body)) DEAD.add(model); // permanent — never retry this model
+      // 429 / 5xx are transient: just fall through to the next model in the list
     }
+    if (pass === 0) await new Promise(s => setTimeout(s, 1200)); // brief pause, then one more full sweep
   }
   throw new Error(lastErr || "chat failed");
 }
@@ -110,19 +113,28 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
     const bot = body.bot === "sales" ? "sales" : "support";
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    // Context-aware retrieval query: include the last few user turns + the most recent answer,
-    // so follow-ups like "can I get it in 7 days?" still retrieve the right document.
+    // Retrieval: search BOTH the current question and the recent conversation context, then
+    // merge. This keeps topic-shifts accurate ("Is my data encrypted?") AND follow-ups working
+    // ("can I get it in 7 days?") — neither crowds the other out.
+    const lastUser = [...messages].reverse().find(m => m.role === "user")?.content || "";
     const userTurns = messages.filter(m => m.role === "user").slice(-3).map(m => m.content);
     const lastAnswer = [...messages].reverse().find(m => m.role === "assistant");
-    const q = (userTurns.join("\n") + (lastAnswer ? "\n" + lastAnswer.content : "")).trim().slice(0, 2000);
+    const qCtx = (userTurns.join("\n") + (lastAnswer ? "\n" + lastAnswer.content : "")).trim().slice(0, 2000);
 
     let retr = [];
-    if (q) {
+    if (lastUser) {
       const corpus = await getCorpusEmbeddings();
-      const qv = await embed(q);
-      retr = corpus.map(e => ({ cid: e.cid, score: cosine(qv, e.vector) }))
-        .sort((a, b) => b.score - a.score).slice(0, TOPK)
-        .map(x => ({ ...BYID[x.cid], score: +x.score.toFixed(4) }));
+      const topFor = async (text, boost) => {
+        const v = await embed(text);
+        return corpus.map(e => ({ cid: e.cid, score: cosine(v, e.vector) * boost }))
+          .sort((a, b) => b.score - a.score).slice(0, 4);
+      };
+      const runs = [topFor(lastUser, 1.08)];                       // the current question, slightly favored
+      if (qCtx && qCtx !== lastUser) runs.push(topFor(qCtx, 1.0)); // + conversation context for follow-ups
+      const best = new Map();
+      (await Promise.all(runs)).flat().forEach(x => { if (!best.has(x.cid) || x.score > best.get(x.cid)) best.set(x.cid, x.score); });
+      retr = [...best.entries()].sort((a, b) => b[1] - a[1]).slice(0, Math.max(TOPK, 5))
+        .map(([cid, score]) => ({ ...BYID[cid], score: +score.toFixed(4) }));
     }
     const sourcesBlock = retr.map((c, i) => `[S${i + 1}] (${c.docTitle} — ${c.heading}, updated ${c.updated})\n${c.text}`).join("\n\n");
     const system = PERSONA[bot] + "\n\n# SOURCES (use ONLY these; cite as [S#]):\n" + (sourcesBlock || "(no relevant sources found)");
