@@ -619,7 +619,14 @@ async function send(){ const text=input.value.trim(); if(!text||busy) return;
     if(/\bNIM-\d|escalat|not in the knowledge base|connect (you )?with|a human|a specialist\b/i.test(reply)) STATS.escalated++;
     const m={role:"assistant",content:reply,rag,retrieved:retr,faithful};
     HIST[active].push(m); addAnswer(m); renderStats();
-  }catch(e){ typing(false); addUserOrBot("bot","Sorry — I hit an error reaching the model.\n\n"+e.message+"\n\nOpen ⚙ to check your key, or run this inside Claude/Cowork."); }
+  }catch(e){ typing(false);
+    if(HIST[active].length && HIST[active][HIST[active].length-1].role==="user") HIST[active].pop(); // drop the failed turn so it doesn't pollute later retrieval
+    const msg=String(e&&e.message||e);
+    if(/429|quota|rate.?limit|RESOURCE_EXHAUSTED/i.test(msg)){
+      addUserOrBot("bot","⏳ The demo's free AI quota just hit its per-minute limit. Give it a few seconds and ask again — that's the free tier catching up, not a bug.");
+    } else {
+      addUserOrBot("bot","Sorry — I couldn't reach the model just now. Please try again in a moment. (Running this outside the demo? Open ⚙ to add an API key.)");
+    } }
   busy=false; $("send").disabled=false; input.focus();
 }
 
