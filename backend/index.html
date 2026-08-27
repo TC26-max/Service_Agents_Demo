@@ -404,7 +404,7 @@ GUARDRAILS: Only discuss Nimbus. Never quote, estimate, anchor, or ballpark Ente
 <div class="wrap">
   <header class="site">
     <div class="brand"><span class="mk">✦</span>
-      <div>Grounded<small id="byline">Built by Emilio Rigales</small></div>
+      <div>Grounded<small id="byline">Portfolio demonstration</small></div>
     </div>
     <div class="sp"></div>
     <div class="seg" id="viewseg">
@@ -464,7 +464,7 @@ GUARDRAILS: Only discuss Nimbus. Never quote, estimate, anchor, or ballpark Ente
       <span class="step"><b>5.</b> Click any source to verify</span>
     </div>
   </div>
-  <footer><b>Privately built for demonstration &amp; portfolio purposes only.</b> Built by Emilio Rigales. Nimbus is a fictional product; all data is illustrative — please don't enter real personal or payment information.
+  <footer><b>Privately built for demonstration &amp; portfolio purposes only.</b> Nimbus is a fictional product; all data is illustrative — please don't enter real personal or payment information.
     <br/><a href="https://github.com/TC26-max/Service_Agents_Demo" target="_blank" rel="noopener">View source on GitHub ↗</a></footer>
 </div>
 
@@ -497,7 +497,7 @@ GUARDRAILS: Only discuss Nimbus. Never quote, estimate, anchor, or ballpark Ente
 
 <script>
 /* ===== CONFIG ===== */
-const SITE={ name:"Emilio Rigales" };
+const SITE={ name:"" }; // attribution appears ONLY on the cover line, by design
 const BACKEND="/"; // optional: full-semantic RAG API URL (e.g. https://nimbus-rag.vercel.app). Set this for a public, key-free site.
 const DEPLOY={ support:"", sales:"" }; // optional: paste deployed RAG backend URLs to embed live bots
 /* ================= */
@@ -555,7 +555,7 @@ function retrieve(q,k){ const qt=tok(q); if(!qt.length) return [];
 }
 
 /* ---------- header links / theme ---------- */
-$("byline").textContent="Built by "+SITE.name;
+if(SITE.name) $("byline").textContent="Built by "+SITE.name;
 function applyTheme(id){ document.documentElement.setAttribute("data-theme",id); }
 
 /* ---------- picker ---------- */

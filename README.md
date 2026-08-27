@@ -1,6 +1,6 @@
 # Grounded — Provable RAG: AI assistants that cite their sources
 
-_Live at **https://nimbus-ai-demos.vercel.app** · Privately built for demonstration & portfolio purposes only · Built by Emilio Rigales_
+_Live at **https://nimbus-ai-demos.vercel.app** · Privately built for demonstration & portfolio purposes only_
 
 **Grounded** is the demo site; **Nimbus** is the fictional SaaS company its two assistants serve.
 
@@ -44,7 +44,6 @@ Visitors need no key; nothing sleeps.
 - **`support-agent.html` / `sales-chatbot.html`** — the original standalone single-bot apps.
 - **`deploy/…`** — simple Gradio (Hugging Face) bundles for the individual bots (alternative).
 - **`TEST-REPORT.md`** — scenario matrix, transcripts, red-team findings + fixes.
-- **`Proposal-Nimbus-AI-Assistants.docx`** — the full proposal.
 - **`DEPLOY-GUIDE.md`** — publish instructions.
 
 ## Stack

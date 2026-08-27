@@ -17,3 +17,8 @@ kb-embeddings.json
 .env
 .env.*
 *.key
+
+# Private prep docs — never public
+INTERVIEW-EXPLAINER.md
+Cliff Notes - Interview explainer.md
+Proposal-Nimbus-AI-Assistants.docx

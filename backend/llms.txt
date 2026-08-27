@@ -1,6 +1,6 @@
 # Grounded — Provable RAG: AI assistants that cite their sources
 
-> A live provable-RAG demonstration by Emilio Rigales: two production-style conversational AI assistants (customer support + sales) for a fictional SaaS company called Nimbus. Hybrid retrieval — semantic embeddings + keyword ranking merged with reciprocal rank fusion — that visitors can inspect directly in a "Retrieval X-ray" view (ranked chunks with scores, no generation). Every answer is retrieved from a 36-passage knowledge base and cited; citations click through to the highlighted source. Includes an editable knowledge base, escalation with illustrative tickets, voice input, SSE streaming, fair-use rate limits, and honest "not in the knowledge base" fallbacks.
+> A live provable-RAG portfolio demonstration: two production-style conversational AI assistants (customer support + sales) for a fictional SaaS company called Nimbus. Hybrid retrieval — semantic embeddings + keyword ranking merged with reciprocal rank fusion — that visitors can inspect directly in a "Retrieval X-ray" view (ranked chunks with scores, no generation). Every answer is retrieved from a 36-passage knowledge base and cited; citations click through to the highlighted source. Includes an editable knowledge base, escalation with illustrative tickets, voice input, SSE streaming, fair-use rate limits, and honest "not in the knowledge base" fallbacks.
 
 - Demo: https://nimbus-ai-demos.vercel.app/
 - Retrieval X-ray: open the site → "Retrieval X-ray" tab (ranking layer alone, scores included)
