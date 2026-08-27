@@ -6,6 +6,21 @@ const MODELS = (process.env.STT_MODEL || "gemini-2.5-flash-lite,gemini-2.5-flash
 const NATIVE = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEAD = new Set();
 
+// Fair-use limiter (v2.2) — same best-effort per-instance approach as api/chat.js.
+const RL_WINDOW_MS = 5 * 60 * 1000, RL_MAX = 10;          // voice is costlier: 10 clips / 5 min / IP
+const RL_DAY_MS = 24 * 60 * 60 * 1000, RL_DAY_MAX = 300;
+const RL = new Map();
+let RL_DAY = { start: Date.now(), n: 0 };
+function rateLimited(req) {
+  const now = Date.now();
+  if (now - RL_DAY.start > RL_DAY_MS) RL_DAY = { start: now, n: 0 };
+  if (++RL_DAY.n > RL_DAY_MAX) return true;
+  const ip = String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "?").split(",")[0].trim();
+  const e = RL.get(ip);
+  if (!e || now - e.t > RL_WINDOW_MS) { if (RL.size > 5000) RL.clear(); RL.set(ip, { t: now, n: 1 }); return false; }
+  return ++e.n > RL_MAX;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", process.env.ALLOW_ORIGIN || "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -18,6 +33,8 @@ export default async function handler(req, res) {
     const audio = body.audio;
     const mime = body.mime || "audio/wav";
     if (!audio) { res.status(400).json({ error: "no audio" }); return; }
+    if (rateLimited(req)) { res.status(429).json({ error: "fair-use limit reached — this free public demo caps voice usage; please try again in a few minutes." }); return; }
+    if (typeof audio !== "string" || audio.length > 2_000_000) { res.status(413).json({ error: "recording too long — keep it under ~15 seconds" }); return; }
     const payload = JSON.stringify({
       contents: [{ parts: [
         { inline_data: { mime_type: mime, data: audio } },

@@ -1,6 +1,13 @@
-# Nimbus — Two Grounded Conversational AI Systems
+# Grounded — Provable RAG: AI assistants that cite their sources
 
-_Privately built for demonstration & portfolio purposes only · Built by Emilio Rigales_
+_Live at **https://nimbus-ai-demos.vercel.app** · Privately built for demonstration & portfolio purposes only · Built by Emilio Rigales_
+
+**Grounded** is the demo site; **Nimbus** is the fictional SaaS company its two assistants serve.
+
+**Provable RAG** means the retrieval isn't a black box: hybrid search (semantic embeddings + keyword
+ranking, merged with reciprocal rank fusion) powers every answer, every claim is cited to a clickable
+source, and the **Retrieval X-ray** tab exposes the ranking layer directly — type a query, see every
+chunk scored, no generation involved. The chatbot is a UI on top of a retrieval engine you can watch.
 
 Two production-style, multi-turn LLM assistants for one fictional SaaS company (**Nimbus**),
 on a single page with a tool switcher. Every answer is **grounded in company documents and
