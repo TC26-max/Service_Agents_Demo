@@ -1,4 +1,4 @@
-# Nimbus — Fictional SaaS Product Spec (shared by both demos)
+# Nimbus, Fictional SaaS Product Spec (shared by both demos)
 
 > **This is a fictional company invented for a portfolio demo.** All names, prices,
 > policies, and data below are mock. Domain `*.nimbushq.example` is a reserved
@@ -6,13 +6,13 @@
 
 ## 1. The product
 
-**Nimbus** is a work-management & team-collaboration platform — projects, tasks,
+**Nimbus** is a work-management & team-collaboration platform, projects, tasks,
 dashboards, and automations in one place. Tagline: *"Where teams plan, track, and ship work."*
 
 - Customers: SMB to mid-market teams (marketing, product, ops, agencies, software teams).
 - Both demo systems serve this one company, so the portfolio reads as a real product:
-  - **System 1 — Nimbus Support Assistant** (existing customers, issue resolution)
-  - **System 2 — Nimbus Sales Assistant** (prospects, qualification + demo booking)
+  - **System 1, Nimbus Support Assistant** (existing customers, issue resolution)
+  - **System 2, Nimbus Sales Assistant** (prospects, qualification + demo booking)
 
 ## 2. Pricing tiers (per user / month)
 
@@ -41,14 +41,14 @@ Zapier, Zoom, Figma. (API + webhooks on Pro+.)
 - **Password/SSO:** self-serve reset at /reset; SSO managed by workspace admin on Business+.
 
 ## 5. Mock data (so the support demo feels real)
-- Sample workspace: `acme-co` — plan **Business**, 24 seats, owner `owner@acme-co.example`, next invoice **Jul 15, 2026**.
+- Sample workspace: `acme-co`, plan **Business**, 24 seats, owner `owner@acme-co.example`, next invoice **Jul 15, 2026**.
 - Ticket ID format: **NIM-#####** (e.g., NIM-48217).
 - Identity check for account changes (mock): confirm **email on file** + **workspace URL** (never card numbers).
 
 ## 6. Escalation triggers (System 1 → human handoff + ticket)
 Create a ticket and hand to a human when:
 1. Billing **disputes / refunds beyond policy**, or chargebacks.
-2. **Account security** — locked out, suspected compromise, unauthorized charges.
+2. **Account security**, locked out, suspected compromise, unauthorized charges.
 3. **Data loss / corruption** reports.
 4. **Legal / GDPR** deletion or data-access requests.
 5. User is **angry or explicitly asks for a human**.
@@ -66,7 +66,7 @@ Create a ticket and hand to a human when:
 - **Conversion action:** book a 30-min demo (capture lead) or start the 14-day Business trial.
 
 ## 8. Guardrails (both systems)
-- Never invent prices, discounts, policies, or features not in this spec — if unknown, say so and offer a human/demo.
+- Never invent prices, discounts, policies, or features not in this spec, if unknown, say so and offer a human/demo.
 - Never reveal another customer's data; verify identity before account changes.
 - Never process payments or move money; direct users to the billing page or a human.
 - Stay in scope (Nimbus only); decline unrelated requests politely.

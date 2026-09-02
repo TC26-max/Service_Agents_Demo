@@ -1,11 +1,13 @@
+> **Historical (June 30, 2026).** Recorded against the first Vercel deployment (four-passage retrieval, earlier model list). The current deployment retrieves top-3 hybrid passages on gemini-2.5-flash; current evidence is in `AUDIT-2026-09-01.md` and `FIXES-APPLIED-2026-09-01.md`.
+
 # Live Deployment Test Report
 
 **Site:** https://nimbus-ai-demos.vercel.app  · **Stack:** Vercel serverless (`/api/chat`) + static hub
-**Model:** Google Gemini (free tier) — `gemini-embedding-001` for retrieval, Flash chat model auto-selected
+**Model:** Google Gemini (free tier), `gemini-embedding-001` for retrieval, Flash chat model auto-selected
 **Tested:** June 30, 2026 · **Result: ✅ All scenarios pass**
 
 ## Method
-The live, deployed endpoint was exercised directly (real semantic RAG: query embedded → top-4
+The live, deployed endpoint was exercised directly (real semantic RAG: query embedded → four-passage
 passages retrieved by cosine similarity → answer generated from those passages with `[S#]`
 citations), plus a UI pass confirming citations render, the source viewer opens, and the
 two themes switch.
@@ -27,11 +29,11 @@ two themes switch.
 - **Model auto-fallback:** Google had `gemini-2.0-flash` set to **0 free-tier quota** on this
   project (confirmed via the API error `limit: 0, model: gemini-2.0-flash`). The backend now
   tries a list (`gemini-2.5-flash` → `gemini-2.0-flash-lite` → `gemini-2.5-flash-lite` →
-  `gemini-1.5-flash`) and locks onto the first with free quota — so this won't recur if Google
+  `gemini-1.5-flash`) and locks onto the first with free quota, so this won't recur if Google
   changes allocations.
 - **Embeddings batched** into a single request (was 36) to stay well under free-tier rate limits.
 - **Faithfulness check** is **off by default** to conserve free-tier quota (one chat call per
-  question instead of two). Core verification — citations, browsable sources, grounding badge —
+  question instead of two). Core verification, citations, browsable sources, grounding badge ,
   is unaffected. Enable anytime by adding the env var `FAITHFULNESS=1` (best with a paid key).
 
 ## Bottom line

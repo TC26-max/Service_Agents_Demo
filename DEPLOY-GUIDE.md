@@ -1,61 +1,28 @@
-# Deploy Guide — a public, always-on, key-free site
+# Deploy guide
 
-Goal: one public link where **anyone** can use both assistants, the bots are **never
-"asleep,"** and the model key stays private. Two pieces:
+The site is one Vercel project (team `service-agents-demo`, project `nimbus-ai-demos`) serving the built page and three serverless functions from `backend/`. The URL stays stable; a custom domain can be added later without breaking links.
 
-1. **The page** — `index.html` (the one-page hub, static).
-2. **The RAG backend** — `backend/` (full semantic retrieval + the model key).
+## Every release
 
-You already have a **live preview in this session** (built-in model, on-page retrieval) — this
-guide is for the durable public site.
+1. Edit sources only: `src/index.template.html`, `kb.json`, `backend/personas/personas.json`, `backend/lib/retrieval.mjs`, `version.json` (bump version and build date), `findings.json`, `eval/gold.json`.
+2. `npm test` (build, eval, four gates, audit probe). Do not deploy on red.
+3. `cd backend && npx vercel --prod` (login expires periodically: `npx vercel login`).
+4. Verify on the live site: hard refresh, status pill shows `Live · hybrid RAG · v<version>`, one cited answer, one escalation, the X-ray, phone width.
+5. If the head, title, description, or card image changed: `linkedin.com/post-inspector` on the URL, then remove and re-add the LinkedIn Featured card. Old shares keep their old preview.
+6. `git add -A && git commit && git push` with the repo identity set to the GitHub account name (never a personal name).
 
----
+## Environment variables (Production)
 
-## Recommended: Vercel (always-on, free, ~10 min)
+`API_KEY`, `PROVIDER=gemini`, `CHAT_MODEL=gemini-2.5-flash`, optional `TOP_K`, `FAITHFULNESS`, `ALLOW_ORIGIN`. Set with `npx vercel env add NAME production`; changes take effect on the next deploy.
 
-### 1) (Optional) Pre-embed for faster cold starts
-The backend builds embeddings automatically on its first request, so you can **skip this**.
-To pre-bake them instead: `cd backend && OPENAI_API_KEY=sk-... npm run ingest`.
+## Why the build step exists
 
-### 2) Deploy the backend
-Push `backend/` to a Git repo and **Import** it at vercel.com (or run `npx vercel`).
-In **Settings → Environment Variables** add `API_KEY` (required) and `PROVIDER` =
-`mistral`, `gemini`, or `openai`. You'll get a URL like `https://nimbus-rag.vercel.app`.
+`vercel.json` carries a Content-Security-Policy whose `script-src` pins the SHA-256 of each inline script. Editing any script by hand in `backend/index.html` breaks the page under that policy; editing the template and rebuilding recomputes the hashes. The gates serve the page under the exact deploy headers and fail on any CSP violation, so a broken hash cannot reach production through `npm test`.
 
-### 3) Point the page at it
-In `index.html`, set:
-```js
-const BACKEND = "https://nimbus-rag.vercel.app";
-```
-Now every visitor gets full semantic RAG with cited sources — **no key on their side.**
+## Health and rollbacks
 
-### 4) Host the page
-Drop `index.html` on any static host. Easiest: the **same Vercel project**, or **Cloudflare
-Pages**, or **GitHub Pages**. Done — share the link.
+`GET /api/health` returns `{ ok, version, provider, model }` without spending a model call; the page's status pill reads it. Vercel keeps previous deployments: `npx vercel ls` and `npx vercel promote <deployment-url>` roll back in seconds.
 
----
+## Cost and limits
 
-## "Never unavailable" — hosting options
-
-| Host | Use for | Always-on? |
-|------|---------|:----------:|
-| **Vercel** | page **and** `/api/chat` backend in one project | ✅ serverless, sub-second cold start |
-| **Cloudflare Pages + Workers** | page + API, global edge | ✅ no sleeping |
-| **GitHub Pages** | the **page only** (static) — pair with a Vercel/Cloudflare API | ✅ for the page |
-| ~~Hugging Face Spaces (free)~~ | not recommended here | ⚠️ sleeps after inactivity (cold start looks "down") |
-
-> The page is static, so it's effectively always up anywhere. Only the **backend** needs a
-> server — Vercel/Cloudflare functions are always-on and hold the key securely.
-
----
-
-## Simplest (personal showcase, no backend)
-Host `index.html` as-is. It runs on-page keyword retrieval and you add your own API key via the
-⚙ button (kept in memory). Great for a quick demo; for a public "anyone can use it" site, use
-the backend above so visitors need no key.
-
-## In this session
-The hub already works live via the built-in model — pick a tool and chat; click any citation to
-verify it against the knowledge base.
-
-_(Hermes was dropped — a self-hosted agent stack doesn't fit an always-on public web demo.)_
+Vercel free tier plus pennies of Gemini usage. Fair-use limits: 20 chat messages per 5 minutes per visitor, 600 per day per warm instance; voice 10 per 5 minutes, 150 per day; message cap 4,000 characters, last 40 turns.

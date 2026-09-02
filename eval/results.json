@@ -1,0 +1,290 @@
+{
+  "label": "in-sample-adjacent (questions written after reading the KB; see eval/gold.json protocol note)",
+  "version": "3.0.0",
+  "keyword": {
+    "n": 30,
+    "recallAt1": 0.6,
+    "recallAt3": 0.73,
+    "byType": {
+      "vocab": {
+        "n": 11,
+        "recallAt3": 1
+      },
+      "paraphrase": {
+        "n": 19,
+        "recallAt3": 0.58
+      }
+    },
+    "misses": {
+      "n": 6,
+      "abstained": 5
+    },
+    "rows": [
+      {
+        "q": "How many days do I have to get my money back?",
+        "type": "paraphrase",
+        "top": [
+          "billing.refunds"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "What is your refund policy?",
+        "type": "vocab",
+        "top": [
+          "billing.refunds"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Can I get a copy of last month's bill?",
+        "type": "paraphrase",
+        "top": [
+          "pricing.pro",
+          "pricing.business"
+        ],
+        "hit3": false
+      },
+      {
+        "q": "Where do I download invoices?",
+        "type": "vocab",
+        "top": [
+          "billing.invoices",
+          "billing.proration"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Is there a free trial and does it need a card?",
+        "type": "vocab",
+        "top": [
+          "billing.trial",
+          "pricing.free",
+          "sales.roi"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Can I try Business before paying?",
+        "type": "paraphrase",
+        "top": [
+          "sales.roi"
+        ],
+        "hit3": false
+      },
+      {
+        "q": "What happens to money I already paid if I move to a cheaper annual plan?",
+        "type": "paraphrase",
+        "top": [
+          "billing.proration",
+          "pricing.free",
+          "pricing.discounts"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Which cards do you take?",
+        "type": "paraphrase",
+        "top": [
+          "billing.payment"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "How much does Pro cost per month?",
+        "type": "vocab",
+        "top": [
+          "pricing.pro",
+          "pricing.business",
+          "integrations.api"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "What is included in the top-tier plan?",
+        "type": "paraphrase",
+        "top": [
+          "data.portability",
+          "pricing.free",
+          "pricing.enterprise"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Do charities get a discount?",
+        "type": "paraphrase",
+        "top": [
+          "pricing.discounts"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Is there a student discount?",
+        "type": "vocab",
+        "top": [
+          "pricing.discounts"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Are you HIPAA compliant?",
+        "type": "vocab",
+        "top": [
+          "security.hipaa",
+          "security.certs",
+          "pricing.enterprise"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Can we sign a BAA?",
+        "type": "vocab",
+        "top": [
+          "accounts.sso",
+          "security.hipaa",
+          "accounts.login"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Is my information encrypted?",
+        "type": "paraphrase",
+        "top": [
+          "security.encryption"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Where are your servers located?",
+        "type": "paraphrase",
+        "top": [],
+        "hit3": false
+      },
+      {
+        "q": "Do you have SOC 2?",
+        "type": "vocab",
+        "top": [
+          "security.certs",
+          "pricing.enterprise"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "My Slack alerts stopped",
+        "type": "paraphrase",
+        "top": [
+          "integrations.slack",
+          "integrations.list"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Does it work with Microsoft Teams?",
+        "type": "vocab",
+        "top": [
+          "integrations.list",
+          "sales.roi",
+          "accounts.sso"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Can I build my own integration?",
+        "type": "paraphrase",
+        "top": [
+          "integrations.connect"
+        ],
+        "hit3": false
+      },
+      {
+        "q": "I forgot my password",
+        "type": "paraphrase",
+        "top": [
+          "accounts.login"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "How do I set up single sign-on with Google?",
+        "type": "vocab",
+        "top": [
+          "accounts.sso",
+          "pricing.free",
+          "accounts.login"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Can I hand my workspace to a colleague?",
+        "type": "paraphrase",
+        "top": [
+          "security.access",
+          "integrations.connect",
+          "billing.invoices"
+        ],
+        "hit3": false
+      },
+      {
+        "q": "How do I add more people to my team?",
+        "type": "paraphrase",
+        "top": [
+          "security.hipaa",
+          "accounts.seats",
+          "pricing.enterprise"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Can I take my data with me if I leave?",
+        "type": "paraphrase",
+        "top": [
+          "security.residency",
+          "data.deletion",
+          "data.export"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Delete everything you have about me",
+        "type": "paraphrase",
+        "top": [
+          "pricing.business"
+        ],
+        "hit3": false
+      },
+      {
+        "q": "How fast do you respond on Business?",
+        "type": "paraphrase",
+        "top": [
+          "sales.differentiators"
+        ],
+        "hit3": false
+      },
+      {
+        "q": "Is there an outage right now?",
+        "type": "paraphrase",
+        "top": [],
+        "hit3": false
+      },
+      {
+        "q": "How is Nimbus different from Asana?",
+        "type": "vocab",
+        "top": [
+          "sales.competitors",
+          "sales.differentiators",
+          "security.certs"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Who is this product for?",
+        "type": "paraphrase",
+        "top": [
+          "sales.fit"
+        ],
+        "hit3": true
+      }
+    ]
+  },
+  "hybrid": null
+}

@@ -1,0 +1,24 @@
+{
+  "name": "grounded-provable-rag",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Grounded: Provable RAG demo (Nimbus AI Assistants). Single-file page, two serverless functions, one shared retriever, gated and versioned.",
+  "scripts": {
+    "build": "node build.mjs",
+    "gate:static": "node test/gate-static.mjs",
+    "gate:endpoint": "node test/gate-endpoint.mjs",
+    "gate:ui": "node test/gate-ui.mjs",
+    "eval": "node eval/run.mjs",
+    "eval:live": "node eval/run.mjs --live",
+    "probe": "node probe-2026-09-01.mjs",
+    "test": "npm run build && npm run eval && npm run gate:static && npm run gate:endpoint && npm run gate:ui && npm run probe",
+    "og": "python3 tools/og-image.py",
+    "deploy": "cd backend && npx vercel --prod"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0",
+    "playwright": "^1.62.1"
+  },
+  "engines": { "node": ">=22" }
+}

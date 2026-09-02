@@ -1,9 +1,10 @@
-# Grounded — Provable RAG: AI assistants that cite their sources
+# Grounded: Provable RAG, AI assistants that cite their sources
 
-> A live provable-RAG portfolio demonstration: two production-style conversational AI assistants (customer support + sales) for a fictional SaaS company called Nimbus. Hybrid retrieval — semantic embeddings + keyword ranking merged with reciprocal rank fusion — that visitors can inspect directly in a "Retrieval X-ray" view (ranked chunks with scores, no generation). Every answer is retrieved from a 36-passage knowledge base and cited; citations click through to the highlighted source. Includes an editable knowledge base, escalation with illustrative tickets, voice input, SSE streaming, fair-use rate limits, and honest "not in the knowledge base" fallbacks.
+> A live provable-RAG portfolio demonstration (version 3.0.0): two production-style conversational AI assistants (customer support and sales) for a fictional SaaS company called Nimbus. Hybrid retrieval (semantic embeddings plus keyword tf-idf, merged with reciprocal rank fusion) that visitors can inspect directly in a Retrieval X-ray view (all 36 passages scored, no generation). Every knowledge answer is retrieved from the knowledge base and cited; citations click through to the highlighted source. Includes an editable knowledge base whose session edits reach the live backend as capped, labelled passages, escalation with server-issued illustrative tickets, a completion-claim guard, voice input, SSE streaming, fair-use limits, a Content-Security-Policy with pinned script hashes, and a Tested page listing every audit finding with its gate.
 
 - Demo: https://nimbus-ai-demos.vercel.app/
-- Retrieval X-ray: open the site → "Retrieval X-ray" tab (ranking layer alone, scores included)
+- Retrieval X-ray: https://nimbus-ai-demos.vercel.app/#xray
+- Tested page (findings, numbers, gates): https://nimbus-ai-demos.vercel.app/#tested
 - Source: https://github.com/TC26-max/Service_Agents_Demo
-- Stack: static HTML/JS frontend; Vercel serverless functions (/api/chat = hybrid RAG + citation-grounded generation with SSE streaming; /api/transcribe = speech-to-text); provider-flexible OpenAI-compatible API (currently Google Gemini).
+- Stack: static HTML/JS page built from a template; Vercel serverless functions (/api/chat hybrid RAG with SSE streaming, /api/transcribe speech-to-text behind a page token, /api/health token-free probe); provider-flexible OpenAI-compatible API (currently Google Gemini). One shared retriever module runs in the page and on the server.
 - Nimbus is fictional; all data is illustrative. The site is a portfolio demonstration, not a real product.
