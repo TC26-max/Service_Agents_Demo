@@ -1289,7 +1289,9 @@ const POP=(function(){ const el=document.createElement("div"); el.id="citePop"; 
     if(now) go(); else { clearTimeout(hideT); hideT=setTimeout(go,150); } }
   el.addEventListener("pointerenter",()=>clearTimeout(hideT)); el.addEventListener("pointerleave",()=>hide());
   document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&owner) hide(true); },true);
-  window.addEventListener("scroll",()=>{ if(owner) hide(true); },true);
+  /* a scroll hides a hover preview, but a keyboard-focused owner keeps its preview and it follows the owner: focusing a chip
+     scrolls it into view, and that scroll must not take the preview away again (WCAG 1.4.13) */
+  window.addEventListener("scroll",()=>{ if(!owner) return; if(owner===document.activeElement&&owner.getBoundingClientRect){ const r=owner.getBoundingClientRect(); if(r.bottom>0&&r.top<innerHeight){ place(r); return; } } hide(true); },true);
   return { show, hide, later(a,html){ clearTimeout(showT); clearTimeout(hideT); showT=setTimeout(()=>show(a,html),110); }, get owner(){ return owner; } };
 })();
 function peekHTML(c,k){ const t=c.text.length>170?c.text.slice(0,170).replace(/\s+\S*$/,"")+"…":c.text;

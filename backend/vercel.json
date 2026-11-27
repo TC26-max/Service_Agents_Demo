@@ -23,7 +23,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-Bw8lTCdp3cbofU1JNOhsT1VDfrUGdHB2n8bmY6NppnA=' 'sha256-okwZp+sAVtxc6a4ORYoTBeIPo3HXvQypnIQf2ebEjRE=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report"
+          "value": "default-src 'self'; script-src 'self' 'sha256-Bw8lTCdp3cbofU1JNOhsT1VDfrUGdHB2n8bmY6NppnA=' 'sha256-2F7NKJ0v1lt5Bo4z/S8hC3iHhwMJw3R9N12XwsaV1Dk=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report"
         },
         {
           "key": "Strict-Transport-Security",
