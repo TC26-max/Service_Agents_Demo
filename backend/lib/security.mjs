@@ -36,6 +36,8 @@ function secret() {
   if (process.env.TOKEN_SECRET) return crypto.createHash("sha256").update("grounded-token:" + process.env.TOKEN_SECRET).digest();
   return crypto.createHash("sha256").update("grounded-demo:" + (process.env.API_KEY || process.env.GEMINI_API_KEY || "no-key")).digest();
 }
+// Labelled keys for other HMAC uses (v3.2: signed chat history), derived from the same secret.
+export function keyFor(label) { return crypto.createHmac("sha256", secret()).update("grounded-key:" + label).digest(); }
 export function issueToken(now = Date.now()) {
   const ts = String(now); const sig = crypto.createHmac("sha256", secret()).update(ts).digest("hex").slice(0, 32);
   return ts + "." + sig;

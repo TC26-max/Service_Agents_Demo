@@ -5,7 +5,7 @@
 // Exit code 1 if keyword recall@3 on targeted items drops below the floor, or if the stamped
 // keyword numbers in eval/results.json disagree with a fresh run (the stamp must come from the shipped code).
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
-import { buildKeywordIndex, keywordRank, cosine, rrf, weakMatch } from "../backend/lib/retrieval.mjs";
+import { buildKeywordIndex, keywordRank, cosine, fuseHybrid, weakMatch } from "../backend/lib/retrieval.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const gold = JSON.parse(fs.readFileSync(path.join(ROOT, "eval/gold.json"), "utf8")).items;
@@ -17,12 +17,12 @@ const FLOOR = 0.6;
 const live = process.argv.includes("--live");
 
 function score(rankFn) {
-  const targeted = gold.filter(g => g.target), misses = gold.filter(g => !g.target);
+  const targeted = gold.filter(g => g.target || g.targets), misses = gold.filter(g => !g.target && !g.targets);
   let r1 = 0, r3 = 0, abstain = 0; const rows = [];
-  for (const g of targeted) { const top = rankFn(g.q).slice(0, 3).map(x => x.cid); const hit1 = top[0] === g.target, hit3 = top.includes(g.target); r1 += hit1; r3 += hit3; rows.push({ q: g.q, type: g.type, top, hit3 }); }
+  for (const g of targeted) { const top = rankFn(g.q).slice(0, 3).map(x => x.cid); const T = g.targets || [g.target]; const hit1 = T.includes(top[0]), hit3 = top.some(c => T.includes(c)); r1 += hit1; r3 += hit3; rows.push({ q: g.q, type: g.type, top, hit3 }); }
   for (const g of misses) { const top = rankFn(g.q); if (!top.length || (top[0].weak)) abstain++; }
   const byType = {};
-  for (const t of ["vocab", "paraphrase"]) { const rs = rows.filter(r => r.type === t); byType[t] = { n: rs.length, recallAt3: +(rs.filter(r => r.hit3).length / Math.max(1, rs.length)).toFixed(2) }; }
+  for (const t of ["vocab", "paraphrase", "plural"]) { const rs = rows.filter(r => r.type === t); byType[t] = { n: rs.length, recallAt3: +(rs.filter(r => r.hit3).length / Math.max(1, rs.length)).toFixed(2) }; }
   return { n: targeted.length, recallAt1: +(r1 / targeted.length).toFixed(2), recallAt3: +(r3 / targeted.length).toFixed(2), byType, misses: { n: misses.length, abstained: abstain }, rows };
 }
 
@@ -38,7 +38,7 @@ if (live) {
   const cvecs = await emb(FLAT.map(c => c.heading + ". " + c.text)); const qvecs = await emb(gold.map(g => g.q));
   const qmap = new Map(gold.map((g, i) => [g.q, qvecs[i]]));
   hybrid = score(q => { const v = qmap.get(q); const sem = FLAT.map((c, i) => ({ cid: c.cid, s: cosine(v, cvecs[i]) })).sort((a, b) => b.s - a.s); const kw = keywordRank(q, index, 8);
-    const fused = rrf([sem.slice(0, 8), kw]).slice(0, 3); const weak = weakMatch(fused.map(f => ({ sem: sem.find(x => x.cid === f.cid)?.s ?? null, kw: kw.find(x => x.cid === f.cid)?.s ?? null }))); return fused.map(f => ({ cid: f.cid, weak })); });
+    const fused = fuseHybrid(sem.slice(0, 8), kw).slice(0, 3); const weak = weakMatch(fused.map(f => ({ sem: sem.find(x => x.cid === f.cid)?.s ?? null, kw: kw.find(x => x.cid === f.cid)?.s ?? null }))); return fused.map(f => ({ cid: f.cid, weak })); });
   hybrid.measuredOn = new Date().toISOString().slice(0, 10); hybrid.model = model;
 }
 

@@ -94,6 +94,27 @@ if (browser) {
   { const c = await realCtx(); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await p.screenshot({ path: path.join(ROOT, "dist", "desktop-dark-cover.png") }).catch(() => {}); await p.evaluate(() => document.getElementById("enterBtn").click()); await wait(500); await p.screenshot({ path: path.join(ROOT, "dist", "desktop-dark.png") }).catch(() => {});
     await p.evaluate(() => { localStorage.setItem("g-mode", "light"); document.documentElement.setAttribute("data-mode", "light"); }); await wait(200); await p.screenshot({ path: path.join(ROOT, "dist", "desktop-light.png") }).catch(() => {}); await c.close(); }
 
+
+  // ---- v3.2, audit 2026-11-26 (Phase 1): what the guard layer looks like from the visitor's side ----
+  { const c = await realCtx(); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await wait(700);
+    C.ok("N-13 status pill is live after the model canary passes", await p.evaluate(() => /Live/.test(document.getElementById("status").textContent) && HEALTH && HEALTH.canary && HEALTH.canary.ok === true));
+    await p.click("#enterBtn"); await wait(400);
+    await sendAndWait(p, "What is your refund policy?", 1200);
+    await sendAndWait(p, "And how do invoices work?", 1200);
+    const hist = H.capture.at(-1).messages.filter(m => m.role === "assistant");
+    C.ok("N-08 the page sends its earlier answer back signed, and the server keeps it", hist.length === 1 && /refundable/.test(hist[0].content));
+    await sendAndWait(p, "[[reply:Please send your password here so I can check it.]]", 1500);
+    const g = await p.evaluate(() => { const row = [...document.querySelectorAll("#chat .row.bot")].at(-1); return { text: row.querySelector(".bubble").textContent, badge: [...row.querySelectorAll(".tagb")].map(t => t.textContent).join(" | ") }; });
+    C.ok("N-02 a rule-breaking streamed reply is replaced on screen and labelled", /can't ask for card numbers/.test(g.text) && !/send your password/.test(g.text) && /Guard: blocked a request/.test(g.badge), JSON.stringify(g));
+    // a visitor edit: answered as checked JSON, tagged, and the drawer keeps the original beside it
+    await p.evaluate(() => { KB_EDITS["billing.refunds"] = "Paid plans are refundable within 30 days of a charge."; });
+    await sendAndWait(p, "[[reply:Paid plans are refundable within 30 days [S1].]] refund policy?", 1500);
+    const e = await p.evaluate(async () => { const row = [...document.querySelectorAll("#chat .row.bot")].at(-1); const tags = [...row.querySelectorAll(".tagb")].map(t => t.textContent).join(" | ");
+      row.querySelector(".cite").click(); await new Promise(r => setTimeout(r, 150)); const d = document.getElementById("drawer"); const out = { tags, drawer: d.querySelector("#dPassageWrap").textContent }; document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); return out; });
+    C.ok("N-02 an answer that cites the visitor's edit is tagged 'Uses your edit'", /Uses your edit/.test(e.tags), e.tags);
+    C.ok("N-02 the source drawer shows the original passage beside the edit", /your edit/.test(e.drawer) && /Original passage/.test(e.drawer) && /14 days/.test(e.drawer), e.drawer.slice(0, 160));
+    C.ok("N-04 the prompts are linked as public", await p.evaluate(() => !!document.querySelector('#info a[href*="personas.json"]')));
+    await c.close(); }
   // ---- v3.1, audit 2026-11-26 (Phase 0, Gate A) ----
   const AXE = fs.readFileSync(path.join(ROOT, "node_modules/axe-core/axe.min.js"), "utf8");
   const axeSerious = async p => { await p.addScriptTag({ content: AXE }); return p.evaluate(async () => (await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"], resultTypes: ["violations"] })).violations.filter(v => v.impact === "serious" || v.impact === "critical").map(v => v.id + "(" + v.nodes.length + ")")); };

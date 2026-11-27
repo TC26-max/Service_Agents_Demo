@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.2.0 (2026-11-26)
+
+Phase 1 of AUDIT-2026-11-26.md: a deterministic guard layer around the model (lib/guard.mjs), retrieval fixes, and a model canary.
+
+- Input: visitor messages and edits are NFKC-normalized and stripped of tag characters, zero-width and bidi controls and variation selectors (N-16).
+- History: every answer is signed with an HMAC; unsigned, tampered or cross-bot assistant turns are dropped (N-08).
+- Sources: each passage is fenced with a code that changes per request, so a passage cannot close itself and issue instructions.
+- Output rules: a reply asking for card numbers, passwords or codes is replaced (R-SECRET); emails, links and phone numbers not in the original knowledge base or the visitor's messages are removed (R-CONTACT); card-like numbers removed (R-CARD); verbatim recitation of the prompt replaced (R-PROMPT, N-04); markdown images neutralized (R-IMAGE); a stretched student discount gets the institutional rule appended (R-STUDENT, N-05). Streamed replies are checked at the end and replaced on screen if needed; a request carrying visitor edits is answered as checked JSON, tagged Uses your edit, with the original passage beside the edit in the source drawer (N-02).
+- Retrieval: light plural stemming, heading matches count as evidence, and fusion drops weak keyword-only hits (N-06). Keyword recall@3 0.73 to 0.81 on a gold set grown from 30 to 36 targeted questions.
+- Model: request bodies are model-aware so CHAT_MODEL can move to Gemini 3.5 Flash-Lite; /api/health?deep=1 runs a cached canary that drives the status pill; a daily GitHub Action checks the live model (N-13).
+- The prompts are linked as public from the sidebar. The November probe now runs in npm test with nothing scheduled open.
+
 ## 3.1.0 (2026-11-26)
 
 Phase 0 of AUDIT-2026-11-26.md: quick fixes for abuse, privacy and accessibility (FIXES-APPLIED-2026-11-26.md has the per-finding table).

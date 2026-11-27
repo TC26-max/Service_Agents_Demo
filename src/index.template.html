@@ -171,6 +171,7 @@
   .drawer .db{padding:17px;overflow-y:auto}
   .drawer .doctext{font-size:13.5px;line-height:1.6;color:#334155}
   .drawer .passage{background:var(--soft);border-left:3px solid var(--accent);border-radius:8px;padding:11px 13px;margin-bottom:12px;font-size:13.5px}
+  .drawer .passage.orig{border-left-color:var(--muted);background:transparent;border:1px dashed var(--line);border-left:3px solid var(--muted)}
   .scrim{position:fixed;inset:0;background:rgba(15,23,42,.35);opacity:0;pointer-events:none;transition:.25s;z-index:19}
   .scrim.open{opacity:1;pointer-events:auto}
   /* misc */
@@ -216,6 +217,7 @@
      control is at least 44 px. The hero title stays in the page for screen readers. */
   .sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
   .privacy .ps{display:none}
+  .viewp{margin:10px 0 0;font-size:12px;color:var(--muted)}
   @media(max-width:640px){
     .hero{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;padding:0}
     .picker{display:flex;gap:8px;margin:8px 0 2px;overflow:visible;padding-bottom:0}
@@ -233,7 +235,7 @@
     .composer{padding:8px 8px max(8px,env(safe-area-inset-bottom))}
     .privacy{padding:0 10px 8px;font-size:10.8px}
     .privacy .pl{display:none}.privacy .ps{display:inline}
-    footer a{display:inline-block;min-height:44px;line-height:44px}
+    footer a,.viewp a{display:inline-block;min-height:44px;line-height:44px}
     .drawer .dh .x{width:44px;height:44px}
     .chathead .sp{flex-basis:100%;height:0}
   }
@@ -593,6 +595,7 @@ function selectBot(id){
   $("info").innerHTML=`<div class="tag">${b.tag.split("·")[0]}</div><h2>${b.name}</h2>
     <div class="desc">${b.blurb}</div>${tipsCard()}<h3>Try asking</h3><div id="trybox"></div>
     <h3>Highlights</h3>${b.highlights.map(h=>`<div class="hl"><span class="d">›</span><span>${h}</span></div>`).join("")}
+    <p class="viewp">The prompts are public: <a href="https://github.com/TC26-max/Service_Agents_Demo/blob/main/backend/personas/personas.json" target="_blank" rel="noopener">read them on GitHub</a>.</p>
     ${id==="support"?`<h3>Demo account (identity check)</h3><div class="cred">email on file: <b>owner@acme-co.example</b><br/>workspace: <b>acme-co</b><small>Illustrative and low-assurance by design: the check demonstrates the flow, any values are accepted, and nothing is looked up.</small></div>`:""}
     <h3>Session</h3><div class="stats" id="statbox"></div>`;
   const tg=$("tipsGot"); if(tg) tg.onclick=()=>{ try{ localStorage.setItem("g-tips","1"); }catch(e){} const t=$("tips"); if(t) t.remove(); };
@@ -626,6 +629,7 @@ const useBackendMode=()=>(typeof BACKEND!=="undefined" && BACKEND && !inCowork()
 function setStatus(){ const s=$("status");
   if(useBackendMode()){
     if(HEALTH===null){ s.className="pill"; s.innerHTML='<span class="dot"></span>Checking backend'; }
+    else if(HEALTH.modelDown){ s.className="pill off"; s.innerHTML='<span class="dot"></span>Model not answering'; }
     else if(HEALTH.ok){ s.className="pill live"; s.innerHTML='<span class="dot"></span>Live · hybrid RAG · v'+(HEALTH.version||"?"); }
     else { s.className="pill off"; s.innerHTML='<span class="dot"></span>Backend not configured'; } }
   else if(inCowork()){ s.className="pill live"; s.innerHTML='<span class="dot"></span>Live · embedded'; }
@@ -634,7 +638,11 @@ function setStatus(){ const s=$("status");
 async function loadHealth(){ if(!useBackendMode()) return;
   try{ const r=await fetch(BACKEND.replace(/\/$/,"")+"/api/health",{cache:"no-store"}); HEALTH=await r.json(); window.__demoToken=HEALTH.token||""; }
   catch(e){ HEALTH={ok:false}; }
-  setStatus(); }
+  setStatus();
+  // v3.2 (audit N-13): once per visit, confirm the model itself answers (a small canary call, cached server-side)
+  if(HEALTH && HEALTH.ok && !window.__deepChecked){ window.__deepChecked=true;
+    try{ const d=await (await fetch(BACKEND.replace(/\/$/,"")+"/api/health?deep=1",{cache:"no-store"})).json();
+      if(d && d.canary){ HEALTH.canary=d.canary; HEALTH.modelDown=d.canary.ok===false; setStatus(); } }catch(e){} } }
 function renderStats(){ const el=$("statbox"); if(!el)return;
   el.innerHTML=`<div class="stat"><b>${STATS.asked}</b><span>asked</span></div>
     <div class="stat"><b>${STATS.grounded}</b><span>grounded</span></div>
@@ -661,6 +669,9 @@ function typing(on){ let t=$("typing");
     r.innerHTML='<div class="av2 bot">N</div><div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div>';
     chat.appendChild(r); chat.scrollTop=chat.scrollHeight; } else if(t) t.remove(); }
 
+const GUARD_LABELS={ "R-SECRET":"Guard: blocked a request for card or login details", "R-PROMPT":"Guard: declined to recite its instructions",
+  "R-CONTACT":"Guard: removed a link or contact not in the knowledge base", "R-CARD":"Guard: removed a card-like number",
+  "R-IMAGE":"Guard: neutralized an image link", "R-STUDENT":"Guard: added the education-discount rule" };
 function addAnswer(m){ // m: {content, retrieved:[{c,s}], grounded, faithful, cited:[k]}
   const row=document.createElement("div"); row.className="row bot";
   const msg=document.createElement("div"); msg.className="msg";
@@ -685,6 +696,9 @@ function addAnswer(m){ // m: {content, retrieved:[{c,s}], grounded, faithful, ci
   else if(tkt && m.intent && !m.claim){ meta.innerHTML+=`<span class="tagb handoff">🎫 Handed off (illustrative ticket)</span>`; }
   else { meta.innerHTML+=`<span class="tagb warn">⚠ Not in knowledge base</span>`; }
   if(m.claim){ meta.innerHTML+=`<span class="tagb claim">⚠ Action claim: this assistant cannot perform actions, nothing was changed</span>`; }
+  // v3.2 (audit N-02, N-04, N-05): the server's output guard says what it changed, by rule
+  (m.guardRules||[]).forEach(r=>{ const l=GUARD_LABELS[r]; if(l) meta.innerHTML+=`<span class="tagb claim" title="Output guard rule ${r}">🛡 ${l}</span>`; });
+  if(m.rag && m.retrieved && [...used].some(k=>m.retrieved[k-1] && m.retrieved[k-1].c.edited)) meta.innerHTML+=`<span class="tagb warn" title="This answer cites a passage you edited in the Knowledge Base tab. The original stays one click away in the source drawer.">✎ Uses your edit</span>`;
   // v2.2: honest instrumentation, how fast, from how many passages
   if(m.ms){ const n=(m.rag&&m.retrieved)?m.retrieved.length:0;
     meta.innerHTML+=`<span class="tagb neutral">⏱ ${(m.ms/1000).toFixed(1)}s${n?` · ${n} passage${n>1?"s":""}`:""}</span>`; }
@@ -757,7 +771,8 @@ function ask(s){ setView("chat"); if(busy){ PENDING=s; toast("Queued: it will ru
 /* ---------- drawer ---------- */
 function openDrawer(c){ $("dCat").textContent=c.cat; $("dTitle").textContent=c.docTitle+", "+c.heading;
   $("dMeta").textContent="Source id: "+c.cid+" · updated "+c.updated;
-  $("dPassageWrap").innerHTML=`<div class="passage"><strong>Cited passage</strong><br>${esc(c.text)}</div>`;
+  $("dPassageWrap").innerHTML=`<div class="passage"><strong>Cited passage${c.edited?" (your edit, this session only)":""}</strong><br>${esc(c.text)}</div>`
+    +(c.edited&&KB_ORIG[c.cid]?`<div class="passage orig"><strong>Original passage</strong><br>${esc(KB_ORIG[c.cid])}</div>`:"");
   const doc=KB.find(d=>d.id===c.docId);
   $("dBody").innerHTML="<h4 style='margin:4px 0 8px'>Full document</h4>"+doc.chunks.map(ch=>{
     const hit=ch.id===c.cid; const t=esc(ch.text);
@@ -866,17 +881,17 @@ async function send(){ const text=input.value.trim(); if(!text||busy) return; co
   const useBackend=(typeof BACKEND!=="undefined" && BACKEND && !inCowork());
   const rag = true;
   try{
-    let retr=[], system, faithful=null, reply;
+    let retr=[], system, faithful=null, reply, sig=null, guardRules=[];
     const t0=performance.now();
     if(useBackend){
       const url=BACKEND.replace(/\/$/,"")+"/api/chat";
-      const msgs=HIST[bot].filter(m=>!m.greeting).map(m=>({role:m.role,content:m.content}));
+      const msgs=HIST[bot].filter(m=>!m.greeting).map(m=>(m.role==="assistant"&&m.sig)?{role:m.role,content:m.content,sig:m.sig}:{role:m.role,content:m.content});
       const mapSources=j=>((j&&j.sources)||[]).map(c=>({c:{cid:c.cid,docId:c.docId,docTitle:c.docTitle,cat:c.cat,updated:c.updated,heading:c.heading,text:c.text,score:(typeof c.score==="number"?c.score:null),match:c.match||null,edited:!!c.edited}, s:c.score||0}));
       const plainJSON=async()=>{ const resp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({bot:bot, kbEdits:kbEditsPayload(), messages:msgs})});
         const j=await resp.json().catch(()=>({}));
         if(!resp.ok || j.error) throw new Error("Backend "+resp.status+(j.error?": "+String(j.error).slice(0,300):""));
-        reply=j.answer||""; faithful=(typeof j.faithful==="boolean")?j.faithful:null; retr=mapSources(j); serverTicket=j.ticket||null; };
+        reply=j.answer||""; faithful=(typeof j.faithful==="boolean")?j.faithful:null; retr=mapSources(j); serverTicket=j.ticket||null; sig=j.sig||null; guardRules=j.guard||[]; };
       // v2.2: streaming first (SSE, words render as they arrive), JSON as fallback.
       let streamed=false, liveRow=null;
       try{
@@ -897,6 +912,8 @@ async function send(){ const text=input.value.trim(); if(!text||busy) return; co
               let o; try{ o=JSON.parse(ev.slice(5).trim()); }catch(e){ continue; }
               if(o.sources) retr=mapSources(o); if(o.ticket) serverTicket=o.ticket;
               if(o.t){ acc+=o.t; lb.textContent=acc; chat.scrollTop=chat.scrollHeight; }
+              if(typeof o.replace==="string"){ acc=o.replace; lb.textContent=acc; }   // v3.2: the output guard rewrote the reply
+              if(o.sig) sig=o.sig; if(o.guard) guardRules=o.guard;
               if(o.error) serr=o.error;
               if(typeof o.faithful==="boolean") faithful=o.faithful; } }
           liveRow.remove(); liveRow=null;
@@ -905,7 +922,7 @@ async function send(){ const text=input.value.trim(); if(!text||busy) return; co
         } else if(ctype.indexOf("json")>=0){
           const j=await resp.json().catch(()=>({}));
           if(!resp.ok || j.error) throw new Error("Backend "+resp.status+(j.error?": "+String(j.error).slice(0,300):""));
-          reply=j.answer||""; faithful=(typeof j.faithful==="boolean")?j.faithful:null; retr=mapSources(j); serverTicket=j.ticket||null;
+          reply=j.answer||""; faithful=(typeof j.faithful==="boolean")?j.faithful:null; retr=mapSources(j); serverTicket=j.ticket||null; sig=j.sig||null; guardRules=j.guard||[];
         } else { throw new Error("no-response"); }
       }catch(e){ if(liveRow){ liveRow.remove(); liveRow=null; }
         const es=String(e&&e.message||e);
@@ -920,7 +937,7 @@ async function send(){ const text=input.value.trim(); if(!text||busy) return; co
     if(rag && cited) STATS.grounded++;
     if(/\bNIM-\d|escalat|not in the knowledge base|connect (you )?with|a human|a specialist\b/i.test(reply)) STATS.escalated++;
     const guard=claimGuard(reply,text);
-    const m={role:"assistant",content:reply,rag,retrieved:retr,faithful,ms:performance.now()-t0,intent:guard.intent,claim:guard.claim,ticket:serverTicket};
+    const m={role:"assistant",content:reply,rag,retrieved:retr,faithful,ms:performance.now()-t0,intent:guard.intent,claim:guard.claim,ticket:serverTicket,sig,guardRules};
     if(guard.claim) STATS.flagged++;
     HIST[bot].push(m);
     if(active===bot){ addAnswer(m); renderStats(); renderChips(); if(typeof speak==="function") speak(m.content); }
