@@ -1,4 +1,4 @@
-// Grounded, api/chat.js (v3.0): hybrid RAG endpoint for the Nimbus assistants (Vercel Node function).
+// Grounded, api/chat.js (v3.1): hybrid RAG endpoint for the Nimbus assistants (Vercel Node function).
 //
 // POST { bot: "support"|"sales", messages: [{role,content}], stream?: true, kbEdits?: {cid: text} }
 //   -> JSON  { answer, sources[], faithful, ticket }
@@ -10,11 +10,17 @@
 // accepted only as capped, labelled passages (max 3, 240 chars each) marked VISITOR-EDITED in the
 // prompt and declared untrusted in the persona. Provider errors are logged server-side and never
 // echoed to the client. Rate limiting is per warm instance and keyed on the platform's client IP.
+//
+// v3.1 (audit 2026-11-26): the limiter counts only accepted requests and caps each address's daily
+// share (N-01); a request is capped at 12 turns and 12,000 characters, and one without a visitor
+// message is refused before any provider call (N-09); malformed JSON is a 400, not a model outage
+// (N-18). Each request logs counts only (turns, characters, provider token usage when reported).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildKeywordIndex, keywordRank, overrideTerms, cosine, rrf } from "../lib/retrieval.mjs";
-import { clientIp } from "../lib/security.mjs";
+import { clientIp, readJsonBody } from "../lib/security.mjs";
+import { makeLimiter } from "../lib/limits.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 function loadJSON(name) {
@@ -52,17 +58,20 @@ const DEAD = new Set(); let RR = 0;
 const TOPK = Math.min(6, Math.max(1, parseInt(process.env.TOP_K || "3", 10) || 3));
 const MAX_TOKENS = 400;
 
-// ---- fair-use limiter (per warm instance; keyed on the platform client IP) ----
-const RL_WINDOW_MS = 5 * 60 * 1000, RL_MAX = 20, RL_DAY_MS = 24 * 60 * 60 * 1000, RL_DAY_MAX = 600;
-const RL = new Map(); let RL_DAY = { start: Date.now(), n: 0 };
-function rateLimited(req) {
-  const now = Date.now();
-  if (now - RL_DAY.start > RL_DAY_MS) RL_DAY = { start: now, n: 0 };
-  if (++RL_DAY.n > RL_DAY_MAX) return true;
-  const ip = clientIp(req); const e = RL.get(ip);
-  if (!e || now - e.t > RL_WINDOW_MS) { if (RL.size > 5000) RL.clear(); RL.set(ip, { t: now, n: 1 }); return false; }
-  return ++e.n > RL_MAX;
+// ---- fair-use limiter (per warm instance; keyed on the platform client IP; accepted calls only) ----
+const LIMIT = makeLimiter({ name: "chat", windowMs: 5 * 60 * 1000, perIp: 20, perIpDay: 120, perDay: 600 });
+// ---- request caps (audit N-09, OWASP LLM 2026 #6 Unbounded Consumption) ----
+const MAX_TURNS = 12, MAX_MSG_CHARS = 4000, MAX_TOTAL_CHARS = 12000;
+function capMessages(list) {
+  const msgs = (Array.isArray(list) ? list : [])
+    .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    .map(m => ({ role: m.role, content: m.content.slice(0, MAX_MSG_CHARS) })).slice(-MAX_TURNS);
+  let total = msgs.reduce((n, m) => n + m.content.length, 0);
+  while (msgs.length > 1 && total > MAX_TOTAL_CHARS) total -= msgs.shift().content.length; // drop the oldest turns first
+  while (msgs.length && msgs[0].role !== "user") msgs.shift();                              // history starts with the visitor
+  return msgs;
 }
+function logUsage(o) { try { console.log("[grounded] usage " + JSON.stringify(o)); } catch (e) {} }
 const FAIR_USE_MSG = "fair-use limit reached: this free public demo caps usage; please try again in a few minutes.";
 
 // ---- CORS: same-origin page needs nothing; an explicit ALLOW_ORIGIN list may be echoed ----
@@ -98,13 +107,13 @@ function payloadFor(model, system, messages, max, stream) {
     messages: [{ role: "system", content: system }, ...messages]
   });
 }
-async function chat(system, messages, max = MAX_TOKENS) {
+async function chat(system, messages, max = MAX_TOKENS, meta = null) {
   const live = CHAT_MODELS.filter(m => !DEAD.has(m)); let last = null;
   for (let tries = 0; tries < live.length; tries++) {
     const model = live[RR % live.length]; let r;
     try { r = await fetch(API_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + KEY }, body: payloadFor(model, system, messages, max, false) }); }
     catch (e) { last = new ProviderError("chat", 0, String(e)); RR = (RR + 1) % live.length; continue; }
-    if (r.ok) return (await r.json()).choices[0].message.content;
+    if (r.ok) { const j = await r.json(); if (meta) meta.usage = j.usage || null; return j.choices[0].message.content; }
     const body = await r.text(); last = new ProviderError("chat", r.status, body);
     if (r.status === 404 || /limit:\s*0/.test(body)) DEAD.add(model);
     RR = (RR + 1) % live.length;
@@ -120,7 +129,7 @@ async function streamChat(res, system, messages, retr, ticket) {
   res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform" });
   const push = o => { try { res.write("data: " + JSON.stringify(o) + "\n\n"); } catch (e) {} };
   push({ sources: retr, ticket });
-  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", sent = 0;
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", sent = 0, outChars = 0;
   try {
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
@@ -128,13 +137,13 @@ async function streamChat(res, system, messages, retr, ticket) {
       while ((i = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
         if (!line.startsWith("data:")) continue; const data = line.slice(5).trim(); if (!data || data === "[DONE]") continue;
-        try { const t = JSON.parse(data).choices?.[0]?.delta?.content; if (t) { sent++; push({ t }); } } catch (e) {}
+        try { const t = JSON.parse(data).choices?.[0]?.delta?.content; if (t) { sent++; outChars += t.length; push({ t }); } } catch (e) {}
       }
     }
   } catch (e) { push({ error: "stream interrupted" }); }
   if (!sent) push({ error: "empty stream" });
   push({ done: true, faithful: null, ticket }); try { res.end(); } catch (e) {}
-  return true;
+  return { outChars };
 }
 
 // ---- visitor KB edits: capped, labelled, session-only, module state never mutated ----
@@ -171,18 +180,18 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
   if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
   if (!KEY) { res.status(500).json({ error: "API key not set. Add API_KEY (and optional PROVIDER) in the deployment environment." }); return; }
-  if (rateLimited(req)) { res.status(429).json({ error: FAIR_USE_MSG }); return; }
+  const body = readJsonBody(req);
+  if (body === null) { res.status(400).json({ error: "invalid_json", message: "The request body must be JSON." }); return; }
+  const bot = body.bot === "sales" ? "sales" : "support";
+  // role whitelist + caps: only visitor and assistant turns reach the provider
+  const messages = capMessages(body.messages);
+  const retrieveOnly = body.mode === "retrieve";
+  if (!retrieveOnly && !messages.some(m => m.role === "user" && m.content.trim())) { res.status(400).json({ error: "empty_request", message: "Send at least one visitor message." }); return; }
+  if (retrieveOnly && !String(body.q || "").trim()) { res.status(400).json({ error: "empty query" }); return; }
+  if (!LIMIT.check(clientIp(req)).ok) { res.status(429).json({ error: FAIR_USE_MSG }); return; }
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-    const bot = body.bot === "sales" ? "sales" : "support";
-    // role whitelist + caps: only visitor and assistant turns reach the provider
-    const messages = (Array.isArray(body.messages) ? body.messages : [])
-      .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-      .map(m => ({ role: m.role, content: m.content.slice(0, 4000) })).slice(-40);
-
     if (body.mode === "retrieve") {
       const q = String(body.q || "").slice(0, 500).trim();
-      if (!q) { res.status(400).json({ error: "empty query" }); return; }
       const eff = await withEdits(body.kbEdits);
       const v = await embed(q);
       const sem = eff.corpus.map(e => ({ cid: e.cid, s: cosine(v, e.vector) })).sort((a, b) => b.s - a.s);
@@ -215,8 +224,11 @@ export default async function handler(req, res) {
     const system = PERSONAS[bot] + "\n\n# TICKET\nIf you escalate in this reply, use exactly this ticket ID: " + ticket +
       "\n\n# SOURCES (use ONLY these; cite as [S#]):\n" + (sourcesBlock(retr) || "(no relevant sources found)");
 
-    if (body.stream === true) { const streamed = await streamChat(res, system, messages, retr, ticket); if (streamed) return; }
-    const answer = await chat(system, messages);
+    const inChars = system.length + messages.reduce((n, m) => n + m.content.length, 0);
+    if (body.stream === true) { const streamed = await streamChat(res, system, messages, retr, ticket); if (streamed) { logUsage({ bot, stream: true, turns: messages.length, inChars, outChars: streamed.outChars }); return; } }
+    const meta = {};
+    const answer = await chat(system, messages, MAX_TOKENS, meta);
+    logUsage({ bot, stream: false, turns: messages.length, inChars, outChars: answer.length, ...(meta.usage ? { promptTokens: meta.usage.prompt_tokens, completionTokens: meta.usage.completion_tokens } : {}) });
     let faithful = null;
     if (retr.length && process.env.FAITHFULNESS) {
       const v = (await chat("You verify whether an answer is supported by sources. Reply only SUPPORTED or UNSUPPORTED.", [{ role: "user", content: "SOURCES:\n" + sourcesBlock(retr) + "\n\nANSWER:\n" + answer }], 16)).toUpperCase();

@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": "public",
   "functions": {
     "api/chat.js": {
       "includeFiles": "{kb*.json,personas/*.json,version.json}",
@@ -11,6 +12,9 @@
     "api/health.js": {
       "includeFiles": "version.json",
       "maxDuration": 10
+    },
+    "api/csp-report.js": {
+      "maxDuration": 5
     }
   },
   "headers": [
@@ -19,7 +23,11 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-tyEEJZDJqdKycCETYIzmc0qKCvtaO4Ca1BRrgYq3ARQ=' 'sha256-8IzGtq+LU/rkn9CiTjOw08LBDafmscjOblhTfllGxhM=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' 'sha256-tyEEJZDJqdKycCETYIzmc0qKCvtaO4Ca1BRrgYq3ARQ=' 'sha256-bgyxCyk5gXSlWkGSDwtPTx9nQQU5yJLho5pt83aUZVs=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
         },
         {
           "key": "X-Content-Type-Options",
@@ -36,6 +44,23 @@
         {
           "key": "Permissions-Policy",
           "value": "microphone=(self), camera=(), geolocation=(), payment=()"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "same-origin"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
         }
       ]
     }

@@ -14,7 +14,7 @@ C.ok("no em/en dashes in any repo file", dashed.length === 0, dashed.slice(0, 6)
 
 // 2. persona rules present in personas.json and in the built page's fallback prompts
 const rules = JSON.parse(R("backend/personas/rules.json")).rules; const personas = JSON.parse(R("backend/personas/personas.json"));
-const built = R("backend/index.html");
+const built = R("backend/public/index.html");
 const pageSupport = (built.match(/id="sys-support">([\s\S]*?)<\/script>/) || [, ""])[1], pageSales = (built.match(/id="sys-sales">([\s\S]*?)<\/script>/) || [, ""])[1];
 for (const [name, re] of Object.entries(rules)) {
   const rx = new RegExp(re, "i");
@@ -45,13 +45,13 @@ C.ok("CHANGELOG mentions the version", R("CHANGELOG.md").includes(ver));
 // 6. deterministic build: rebuild and compare bytes
 const before = crypto.createHash("sha256").update(built).digest("hex") + crypto.createHash("sha256").update(R("backend/vercel.json")).digest("hex");
 execFileSync(process.execPath, [path.join(ROOT, "build.mjs")], { stdio: "ignore" });
-const after = crypto.createHash("sha256").update(R("backend/index.html")).digest("hex") + crypto.createHash("sha256").update(R("backend/vercel.json")).digest("hex");
+const after = crypto.createHash("sha256").update(R("backend/public/index.html")).digest("hex") + crypto.createHash("sha256").update(R("backend/vercel.json")).digest("hex");
 C.ok("build is deterministic (byte-identical rebuild)", before === after);
 
 // 7. CSP hashes match the built inline scripts
 const vercel = JSON.parse(R("backend/vercel.json")); const csp = vercel.headers[0].headers.find(h => h.key === "Content-Security-Policy").value;
 const want = [];
-for (const m of R("backend/index.html").matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/g)) { const a = m[1] || ""; if (/\bsrc=/.test(a) || (/type=/.test(a) && !/javascript/.test(a))) continue; want.push("'sha256-" + crypto.createHash("sha256").update(m[2], "utf8").digest("base64") + "'"); }
+for (const m of R("backend/public/index.html").matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/g)) { const a = m[1] || ""; if (/\bsrc=/.test(a) || (/type=/.test(a) && !/javascript/.test(a))) continue; want.push("'sha256-" + crypto.createHash("sha256").update(m[2], "utf8").digest("base64") + "'"); }
 C.ok("CSP pins every inline script hash", want.length >= 3 && want.every(h => csp.includes(h)), `${want.length} scripts`);
 C.ok("CSP has frame-ancestors none and no unsafe-inline scripts", /frame-ancestors 'none'/.test(csp) && !/script-src[^;]*unsafe-inline/.test(csp));
 
@@ -59,17 +59,19 @@ C.ok("CSP has frame-ancestors none and no unsafe-inline scripts", /frame-ancesto
 // Both names are assembled at runtime so this file never contains them as literals.
 const PEN = ["Emi" + "lio", "Rig" + "ales"].join(" "); const REAL = new RegExp("\\b" + String.fromCharCode(84, 111, 114, 105, 110) + "\\b", "i");
 C.ok("pen name exactly once in the built page", built.split(PEN).length - 1 === 1);
-const others = textFiles.filter(f => !f.endsWith(path.join("backend", "index.html")) && !f.endsWith(path.join("src", "index.template.html")) && fs.readFileSync(f, "utf8").includes(PEN)).map(f => path.relative(ROOT, f));
+const others = textFiles.filter(f => !f.endsWith(path.join("backend", "public", "index.html")) && !f.endsWith(path.join("src", "index.template.html")) && fs.readFileSync(f, "utf8").includes(PEN)).map(f => path.relative(ROOT, f));
 C.ok("pen name in no other repo file", others.length === 0, others.join(", "));
 C.ok("account owner's real name nowhere in the repo", !textFiles.some(f => REAL.test(fs.readFileSync(f, "utf8"))));
 
 // 9. reproducibility and evidence pack
-C.ok("og-image generator committed", fs.existsSync(path.join(ROOT, "tools/og-image.py")) && fs.existsSync(path.join(ROOT, "backend/og-image.png")));
+C.ok("og-image generator committed", fs.existsSync(path.join(ROOT, "tools/og-image.py")) && fs.existsSync(path.join(ROOT, "backend/public/og-image.png")));
 C.ok("root package.json with test script", JSON.parse(R("package.json")).scripts?.test?.length > 0);
 C.ok("CI workflow present", fs.existsSync(path.join(ROOT, ".github/workflows/test.yml")));
 C.ok("legacy duplicates removed", !fs.existsSync(path.join(ROOT, "index.html")) && !fs.existsSync(path.join(ROOT, "deploy")));
-const findings = JSON.parse(R("findings.json")).findings; const audit = R("AUDIT-2026-09-01.md");
-C.ok("every finding id appears in the audit and the built page", findings.every(f => audit.includes(f.id) && built.includes(`id="${f.id}"`)));
+const register = JSON.parse(R("findings.json")); const findings = register.findings;
+const auditFor = id => R((register.audits || {})[id.split("-")[0]] || register.audit);
+C.ok("every finding id appears in its audit and the built page", findings.every(f => auditFor(f.id).includes(f.id) && built.includes(`id="${f.id}"`)));
+C.ok("finding ids are unique", new Set(findings.map(f => f.id)).size === findings.length);
 C.ok("FIXES-APPLIED generated for this build date", fs.existsSync(path.join(ROOT, `FIXES-APPLIED-${JSON.parse(R("version.json")).buildDate}.md`)));
 C.ok("sister project cross-linked in page and README", /Harlan/.test(built) && /Harlan/.test(readme));
 C.ok("gold set and results present", fs.existsSync(path.join(ROOT, "eval/gold.json")) && fs.existsSync(path.join(ROOT, "eval/results.json")));

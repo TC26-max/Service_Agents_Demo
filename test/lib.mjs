@@ -1,11 +1,13 @@
-// test/lib.mjs: shared eval helper. Starts a local HTTP server that serves backend/ and mounts the REAL
-// api handlers behind a Vercel-style shim with the upstream provider mocked (deterministic,
-// meaning-correlated embeddings). Also launches headless Chromium when Playwright is available.
+// test/lib.mjs: shared eval helper. Starts a local HTTP server that serves backend/public/ (the only
+// static root, as on Vercel with outputDirectory "public") and mounts the REAL api handlers behind a
+// Vercel-style shim with the upstream provider mocked (deterministic, meaning-correlated embeddings).
+// Also launches headless Chromium when Playwright is available.
 import http from "node:http"; import fs from "node:fs"; import path from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const BACKEND = path.join(ROOT, "backend");
+export const PUBLIC = path.join(BACKEND, "public");
 
 export class Check {
   constructor(name) { this.name = name; this.pass = 0; this.fail = 0; this.log = []; }
@@ -42,22 +44,28 @@ export async function startHarness({ port = 8811, env = {} } = {}) {
   const { default: chat } = await import(pathToFileURL(path.join(BACKEND, "api/chat.js")).href);
   const { default: transcribe } = await import(pathToFileURL(path.join(BACKEND, "api/transcribe.js")).href);
   const { default: health } = await import(pathToFileURL(path.join(BACKEND, "api/health.js")).href);
-  const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".txt": "text/plain", ".json": "application/json" };
-  const headers = JSON.parse(fs.readFileSync(path.join(BACKEND, "vercel.json"), "utf8")).headers?.[0]?.headers || [];
+  const { default: cspReport } = await import(pathToFileURL(path.join(BACKEND, "api/csp-report.js")).href);
+  const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".json": "application/json", ".xml": "application/xml" };
+  const vcfg = JSON.parse(fs.readFileSync(path.join(BACKEND, "vercel.json"), "utf8"));
+  const headers = vcfg.headers?.[0]?.headers || []; const apiHeaders = (vcfg.headers || []).find(h => h.source === "/api/(.*)")?.headers || [];
+  const STATIC_ROOT = path.join(BACKEND, vcfg.outputDirectory || ".");
   const server = http.createServer(async (req, res) => {
     for (const h of headers) res.setHeader(h.key, h.value); // serve under the exact deploy headers (CSP included)
     const u = new URL(req.url, "http://x");
     res.status = c => { res.statusCode = c; return res; }; res.json = o => { res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(o)); };
     if (u.pathname.startsWith("/api/")) {
+      for (const h of apiHeaders) res.setHeader(h.key, h.value);
       let raw = ""; for await (const ch of req) raw += ch; try { req.body = raw ? JSON.parse(raw) : {}; } catch { req.body = raw; }
-      try { if (u.pathname === "/api/chat") await chat(req, res); else if (u.pathname === "/api/transcribe") await transcribe(req, res); else if (u.pathname === "/api/health") await health(req, res); else { res.statusCode = 404; res.end(); } }
+      try { if (u.pathname === "/api/chat") await chat(req, res); else if (u.pathname === "/api/transcribe") await transcribe(req, res); else if (u.pathname === "/api/health") await health(req, res); else if (u.pathname === "/api/csp-report") await cspReport(req, res); else { res.statusCode = 404; res.end(); } }
       catch (e) { res.statusCode = 500; res.end("handler threw: " + e.message); }
       return;
     }
     if (u.pathname.startsWith("/_vercel/insights/")) { res.setHeader("Content-Type", "text/javascript"); return res.end("/* analytics stub for local gates */"); }
-    const p = u.pathname === "/" ? "/index.html" : u.pathname; const f = path.join(BACKEND, p);
-    if (fs.existsSync(f) && fs.statSync(f).isFile()) { res.setHeader("Content-Type", MIME[path.extname(f)] || "application/octet-stream"); return res.end(fs.readFileSync(f)); }
-    res.statusCode = 404; res.end("not found");
+    const p = u.pathname === "/" ? "/index.html" : decodeURIComponent(u.pathname); const f = path.join(STATIC_ROOT, p);
+    if (f.startsWith(STATIC_ROOT + path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) { res.setHeader("Content-Type", MIME[path.extname(f)] || "application/octet-stream"); return res.end(fs.readFileSync(f)); }
+    const nf = path.join(STATIC_ROOT, "404.html"); res.statusCode = 404;
+    if (fs.existsSync(nf)) { res.setHeader("Content-Type", MIME[".html"]); return res.end(fs.readFileSync(nf)); }
+    res.end("not found");
   });
   await new Promise(r => server.listen(port, r));
   const base = `http://localhost:${port}`;

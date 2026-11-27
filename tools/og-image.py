@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tools/og-image.py: generates backend/og-image.png (1200x627) for link previews.
+"""tools/og-image.py: generates backend/public/og-image.png (1200x627) for link previews.
 
 Deterministic for a given version.json (no timestamps). Requires Pillow (pip install pillow) and the
 DejaVu fonts (present on most Linux images; on macOS: brew install --cask font-dejavu, or set FONT_DIR).
@@ -56,6 +56,6 @@ sy = gy + 62; st = "1 · Billing & Refunds · 0.74 sem · +kw"; sf = font(18)
 assert bx0 + tw(st, sf) + 36 <= cx1 - 20, "chip overflow"
 d.rounded_rectangle([bx0, sy, bx0 + tw(st, sf) + 36, sy + 42], 21, fill=soft); d.text((bx0 + 18, sy + 11), st, font=sf, fill=accent)
 d.text((bx0, cy1 - 46), "Click the citation: see the exact source.", font=font(21), fill=(91, 102, 119))
-out = os.path.join(ROOT, "backend", "og-image.png")
+out = os.path.join(ROOT, "backend", "public", "og-image.png")
 img.save(out, optimize=False)
 print("wrote", out, "for v" + VERSION)

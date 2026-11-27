@@ -18,7 +18,7 @@ const F = (id, title, reproduced, evidence) => { (reproduced ? findings : solid)
 const read = f => fs.readFileSync(path.join(ROOT, f), "utf8");
 
 // ---------------------------------------------------------------- static checks
-const html = read("backend/index.html"); const chatSrc = read("backend/api/chat.js");
+const html = read("backend/public/index.html"); const chatSrc = read("backend/api/chat.js");
 const dashFiles = {};
 for (const f of walk(ROOT)) {
   if (!/\.(html|md|txt|js|mjs|json)$/.test(f) || /node_modules|\.git\//.test(f)) continue;
@@ -122,7 +122,7 @@ F("G-17b", "keyword-only junk chunk enters top-3 because question words are not 
 // ---------------------------------------------------------------- browser probes (optional)
 let pw = null; try { pw = await import("playwright"); } catch { try { pw = await import(pathToFileURL(path.join(ROOT, "node_modules/playwright/index.mjs")).href); } catch { } }
 if (pw) {
-  const staticRoot = BACKEND; const sPort = PORT + 1;
+  const staticRoot = path.join(BACKEND, "public"); const sPort = PORT + 1; // v3.1: the only static root (audit N-10)
   const sServer = http.createServer((req, res) => { const p = req.url === "/" ? "/index.html" : req.url.split("?")[0]; const f = path.join(staticRoot, p); if (fs.existsSync(f) && fs.statSync(f).isFile()) { res.setHeader("Content-Type", p.endsWith(".html") ? "text/html; charset=utf-8" : "application/octet-stream"); return res.end(fs.readFileSync(f)); } res.statusCode = 404; res.end(); }).listen(sPort);
   const browser = await pw.chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--no-proxy-server"] });
   const stub = async (w = 1280, h = 800) => { const c = await browser.newContext({ viewport: { width: w, height: h } }); await c.addInitScript(() => { window.__replies = []; window.cowork = { askClaude: async p => { const d = window.__delay || 0; if (d) await new Promise(r => setTimeout(r, d)); if (/SUPPORTED or UNSUPPORTED/.test(p)) return "SUPPORTED"; return window.__replies.shift() ?? "Default stub answer [S1]."; } }; }); return c; };

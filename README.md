@@ -1,6 +1,6 @@
 # Grounded: Provable RAG, AI assistants that cite their sources
 
-_Live at **https://nimbus-ai-demos.vercel.app** · Privately built for demonstration and portfolio purposes only · v3.0.0_
+_Live at **https://nimbus-ai-demos.vercel.app** · Privately built for demonstration and portfolio purposes only · v3.1.0_
 
 **Grounded** is the demo site; **Nimbus** is the fictional SaaS company its two assistants serve. Built AI-assisted; every behavior specified, tested against a gold set, red-teamed, and explainable. The **Tested** tab on the site lists what broke and how each item is guarded.
 
@@ -17,33 +17,36 @@ Two production-style assistants on one page: a **customer-support agent** (escal
 - **Identity check.** The support bot asks for the email on file and workspace URL before account specifics. It is illustrative and low-assurance by design; the demo values are shown on screen.
 - **Retrieval numbers.** Keyword-path recall on the in-sample-adjacent gold set is stamped into the Tested tab at build time from the shipped retriever; the hybrid number needs a live key (`npm run eval:live`) and is reported as not yet measured until then.
 - **Faithfulness verification** exists behind `FAITHFULNESS=1` and is off in the public deployment to keep it free.
-- **Fair use.** 20 chat messages per 5 minutes per visitor, voice 10 per 5 minutes, per warm instance. Not authentication, not a security boundary; it bounds cost.
+- **Fair use.** 20 chat messages per 5 minutes and 120 per day per visitor, voice 10 per 5 minutes, per warm instance, counting accepted requests only; a request carries at most 12 turns and 12,000 characters. Not authentication, not a security boundary; it bounds cost. A Vercel WAF rule in front of it is recommended (see `DEPLOY-GUIDE.md`).
+- **Privacy.** Questions and voice clips are sent to Google Gemini to write the answer; the page says so under the composer, and the sales assistant suggests example contact details instead of real ones.
 
 ## How it is built
 
-- `src/index.template.html` plus `kb.json`, `backend/personas/personas.json`, `backend/lib/retrieval.mjs`, `version.json`, `findings.json` and `eval/results.json` are the single sources. `node build.mjs` assembles `backend/index.html`, `backend/vercel.json` (with a Content-Security-Policy that pins the SHA-256 of each inline script) and `FIXES-APPLIED-<date>.md`. The build is deterministic.
-- `backend/api/chat.js`: hybrid retrieval, citation-grounded generation, SSE streaming with a JSON fallback, capped and labelled visitor edits, role-whitelisted messages, server-issued ticket IDs, fixed error copy. `backend/api/transcribe.js`: speech-to-text behind a short-lived page token. `backend/api/health.js`: token-free health probe that drives the status pill.
+- `src/index.template.html` plus `kb.json`, `backend/personas/personas.json`, `backend/lib/retrieval.mjs`, `version.json`, `findings.json` and `eval/results.json` are the single sources. `node build.mjs` assembles `backend/public/index.html`, `backend/vercel.json` (with a Content-Security-Policy that pins the SHA-256 of each inline script) and `FIXES-APPLIED-<date>.md`. The build is deterministic.
+- `backend/api/chat.js`: hybrid retrieval, citation-grounded generation, SSE streaming with a JSON fallback, capped and labelled visitor edits, role-whitelisted messages, server-issued ticket IDs, fixed error copy. `backend/api/transcribe.js`: speech-to-text behind a short-lived page token. `backend/api/health.js`: token-free health probe that drives the status pill. `backend/api/csp-report.js`: counts-only CSP violation reports.
 - Provider-flexible by environment variable (currently Google Gemini: `gemini-embedding-001` and `gemini-2.5-flash` with reasoning disabled).
-- Deploy root is `backend/`; see `DEPLOY-GUIDE.md`.
+- Vercel Root Directory is `backend/`, and only `backend/public/` is served as static files: server code, prompts and the knowledge base are bundled into the functions, never published as URLs. Pull requests get preview deployments and `main` deploys production; see `DEPLOY-GUIDE.md`.
 
 ## Tests and gates
 
-`npm test` runs the build, the retrieval eval, and four gates, then the audit probe:
+`npm test` runs the build, the retrieval eval, and three gates, then both audit probes:
 
 | Gate | What it asserts |
 |---|---|
 | `test/gate-static.mjs` | no em or en dashes anywhere; every persona rule present in both personas and in the built page; docs do not overstate; deterministic build; CSP hashes match the built scripts; pen name exactly once; version stamps consistent |
-| `test/gate-endpoint.mjs` | real handlers over HTTP with the provider mocked: role whitelist, capped and labelled edits, no provider text in errors, limiter keyed on the platform IP, CORS, voice token, stream equals JSON, forced fallback, ticket uniqueness, 36 scored passages, TOP_K |
-| `test/gate-ui.mjs` | the built page in headless Chromium under the deploy headers: no CSP errors, hidden dead controls, demo credentials, claim guard on 20 phantom and 20 legitimate phrasings, bot-switch filing, queued suggestions, Escape and deep links, phone layout in both themes |
+| `test/gate-endpoint.mjs` | real handlers over HTTP with the provider mocked: role whitelist, capped and labelled edits, no provider text in errors, limiter keyed on the platform IP and counting accepted requests only, request caps, malformed tokens and JSON, WAV-only voice, server files not published, security.txt, CSP reporting, CORS, voice token, stream equals JSON, forced fallback, ticket uniqueness, 36 scored passages, TOP_K |
+| `test/gate-ui.mjs` | the built page in headless Chromium under the deploy headers: no CSP errors, no dead controls, demo credentials, claim guard on 20 phantom and 20 legitimate phrasings, bot-switch filing, queued suggestions, Escape and deep links, axe-core with no serious issues in every view and theme, keyboard focus kept in the intro and the source drawer, citation lists, privacy note, phone layout with the composer in view and 44 px controls |
 | `eval/run.mjs` | keyword-path recall on `eval/gold.json` with the shipped retriever; floor 0.6 |
-| `probe-2026-09-01.mjs` | reproduces every audit finding and must report zero |
+| `probe-2026-09-01.mjs` | reproduces every September audit finding and must report zero |
+| `probe-2026-11.mjs` | reproduces the November server-side findings; findings scheduled for a later phase are listed with `--open` and everything else must stay fixed |
 
 GitHub Actions runs the same on every push.
 
 ## Evidence
 
-- `AUDIT-2026-09-01.md`: the audit, every finding reproduced by execution.
-- `FIXES-APPLIED-2026-09-01.md`: generated from `findings.json`, before and after numbers, gate per finding.
+- `AUDIT-2026-09-01.md` and `AUDIT-2026-11-26.md`: the two audits, every finding reproduced by execution.
+- `FIXES-APPLIED-<date>.md`: generated from `findings.json` at each release, before and after numbers, gate per finding.
+- `SECURITY.md`: how to report a vulnerability (also `/.well-known/security.txt` on the site).
 - `TEST-REPORT.md` and `LIVE-TEST-REPORT.md`: historical (June 2026) design-time reports, kept for the record.
 - `DESIGN-support-agent.md`, `DESIGN-sales-chatbot.md`: historical designs; the shipped prompts live in `backend/personas/personas.json`.
 - `CHANGELOG.md`.
@@ -54,6 +57,6 @@ Harlan & West IT Service Desk, built with the same method (three audits, gated f
 
 ## Folder map
 
-`backend/` (deploy root: page, api, lib, personas, kb, og-image, llms.txt) · `src/` (page template) · `kb.json`, `knowledge-base/` (the fictional company documents) · `eval/` (gold set, runner, results) · `test/` (gates and the shared harness) · `tools/og-image.py` (card generator) · `build.mjs`, `version.json`, `findings.json`.
+`backend/` (Vercel root: `public/` static files, `api/`, `lib/`, `personas/`, `kb.json`) · `src/` (page template) · `kb.json`, `knowledge-base/` (the fictional company documents) · `eval/` (gold set, runner, results) · `test/` (gates and the shared harness) · `tools/og-image.py` (card generator) · `build.mjs`, `version.json`, `findings.json`.
 
 > Nimbus is fictional; all data is illustrative. Please don't enter real personal or payment information.
