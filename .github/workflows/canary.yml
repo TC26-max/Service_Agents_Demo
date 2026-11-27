@@ -1,0 +1,21 @@
+name: canary
+# Daily check that the live demo's model still answers (audit N-13). It calls the deep health check,
+# which runs one small model call (cached on the server). A failed run means the model or the key
+# needs attention; GitHub emails the repository owner about failed scheduled runs.
+on:
+  schedule:
+    - cron: "17 14 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deep health check
+        run: |
+          set -euo pipefail
+          body=$(curl -fsS --max-time 30 "https://nimbus-ai-demos.vercel.app/api/health?deep=1")
+          echo "$body" | jq '{ok, version, model, canary}'
+          # before v3.2 is deployed the canary field is absent; after that it must be green
+          echo "$body" | jq -e '.ok == true and (.canary == null or .canary.ok == true)' > /dev/null

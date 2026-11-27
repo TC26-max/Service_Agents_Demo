@@ -26,7 +26,7 @@ Only `backend/public/` is published as static files (`outputDirectory: "public"`
 |---|---|---|
 | `API_KEY` | yes | Gemini API key. |
 | `PROVIDER` | yes | `gemini`. |
-| `CHAT_MODEL` | no | Comma list, round-robin. Default `gemini-2.5-flash`. |
+| `CHAT_MODEL` | no | Comma list, round-robin. Default `gemini-2.5-flash`, which Google now serves only to existing users; `gemini-3.5-flash-lite` is Google's recommended replacement (audit N-13). Request bodies adapt to the model family. |
 | `TOKEN_SECRET` | recommended | Secret for the short-lived voice token, separate from the provider key (audit N-22). Any long random string, for example the output of `openssl rand -hex 32`. Until it is set, the token secret is derived from `API_KEY` as in v3.0. Changing it only signs visitors' open pages out of voice for up to 15 minutes. |
 | `TOP_K`, `FAITHFULNESS`, `ALLOW_ORIGIN`, `STT_MODEL`, `EMBED_MODEL`, `API_BASE`, `TRUST_XFF` | no | See `backend/README.md`. |
 
@@ -41,13 +41,20 @@ These come from AUDIT-2026-11-26.md and have no code equivalent:
 3. **Voice token secret (N-22).** Add `TOKEN_SECRET` as above.
 4. **Vulnerability reports (N-21).** In the GitHub repo, **Settings > Advanced Security** (or **Code security**), enable **Private vulnerability reporting**. `/.well-known/security.txt` points reporters there; it expires on 2027-11-26 and must be renewed before then.
 
+## Switching the model (N-13)
+
+1. In Vercel, set `CHAT_MODEL` to `gemini-3.5-flash-lite` (Preview first: add it to the Preview environment and open a pull request preview).
+2. Open `/api/health?deep=1` on that deployment: `canary.ok` must be `true`, and the status pill must read Live.
+3. Run `API_KEY=... PROVIDER=gemini CHAT_MODEL=gemini-3.5-flash-lite npm run eval:live` locally to record the hybrid retrieval number, and ask a few questions from the Tested page by hand.
+4. Set the same value for Production and redeploy. The daily `canary` GitHub Action keeps checking it.
+
 ## Why the build step exists
 
 `vercel.json` carries a Content-Security-Policy whose `script-src` pins the SHA-256 of each inline script. Editing any script by hand in `backend/public/index.html` breaks the page under that policy; editing the template and rebuilding recomputes the hashes. The gates serve the page under the exact deploy headers and fail on any CSP violation, so a broken hash cannot reach production through `npm test`. Violations seen by real browsers are reported to `/api/csp-report` and logged as directive, blocked origin and page path only.
 
 ## Health and rollbacks
 
-`GET /api/health` returns `{ ok, version, provider, model, token }` without spending a model call; the page's status pill reads it. Vercel keeps previous deployments: **Deployments**, then **Promote** on an earlier one (or `npx vercel promote <deployment-url>`) rolls back in seconds.
+`GET /api/health` returns `{ ok, version, provider, model, token }` without spending a model call; the page's status pill reads it. `GET /api/health?deep=1` adds `canary`, one small model call cached per warm instance (6 hours after a success, 10 minutes after a failure, at most 6 deep checks per visitor per hour); the page runs it once per visit and the daily `canary` workflow runs it from GitHub. Vercel keeps previous deployments: **Deployments**, then **Promote** on an earlier one (or `npx vercel promote <deployment-url>`) rolls back in seconds.
 
 ## Cost and limits
 

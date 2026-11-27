@@ -5,8 +5,19 @@
 
 export const STOPWORDS = new Set("a an the of to and or for in on at is are be do does did you your we our it its this that these those with how can could would should i my me mine as from what which when where who whom why have has had was were will there here about into than then them they am been being if so not any some".split(" "));
 
+// v3.2 (audit N-06): light plural stemming, so "plans" matches "plan" and "invoices" matches "invoice".
+// Deliberately small: plurals only, never words ending in ss, us or is (class, status, analysis).
+export function stem(w) {
+  if (w.length <= 3 || /\d/.test(w)) return w;
+  if (/[^aeiou]ies$/.test(w)) return w.slice(0, -3) + "y";
+  if (/(?:ches|shes|sses|xes|zzes)$/.test(w)) return w.slice(0, -2);
+  if (/(?:ss|us|is)$/.test(w)) return w;
+  if (/s$/.test(w)) return w.slice(0, -1);
+  return w;
+}
+
 export function tokenize(s) {
-  return String(s).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w && w.length > 1 && !STOPWORDS.has(w));
+  return String(s).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w && w.length > 1 && !STOPWORDS.has(w)).map(stem);
 }
 
 // chunks: [{ cid, heading, text }]
@@ -21,7 +32,8 @@ export function overrideTerms(chunk, text) {
 }
 
 // tf-idf with a heading boost. A single matched term that appears in more than a quarter of the
-// corpus is not evidence (v3.0 rule: it produced junk keyword matches for question words).
+// corpus is not evidence (v3.0 rule: it produced junk keyword matches for question words), unless it
+// is in the passage heading (v3.2: "plan" is common, but "Pro plan" is about plans).
 export function keywordRank(q, index, k = 8, overrides = null) {
   const qt = [...new Set(tokenize(q))]; if (!qt.length) return [];
   const { docs, df, N } = index; const out = [];
@@ -32,7 +44,7 @@ export function keywordRank(q, index, k = 8, overrides = null) {
     let s = 0, matched = 0, rare = false;
     for (const t of qt) {
       if (!tf[t]) continue;
-      matched++; if ((df[t] || 0) <= N * 0.25) rare = true;
+      matched++; if ((df[t] || 0) <= N * 0.25 || headTerms.has(t)) rare = true;
       let w = Math.log(1 + N / (df[t] || 1)) * (1 + Math.log(tf[t])); if (headTerms.has(t)) w *= 1.6; s += w;
     }
     if (!matched || (matched === 1 && !rare)) continue;
@@ -52,6 +64,13 @@ export function rrf(lists, K = 60) {
   const m = new Map();
   for (const list of lists) list.forEach((x, i) => m.set(x.cid, (m.get(x.cid) || 0) + 1 / (K + i + 1)));
   return [...m.entries()].map(([cid, s]) => ({ cid, s })).sort((a, b) => b.s - a.s);
+}
+
+// v3.2 (audit N-06): hybrid fusion in which a weak keyword-only match cannot ride reciprocal rank fusion
+// past strong semantic results. Keyword hits under kwFloor of the best keyword score are dropped first.
+export function fuseHybrid(sem, kw, K = 60, kwFloor = 0.4) {
+  const top = kw.length ? kw[0].s : 0;
+  return rrf([sem, kw.filter(x => x.s >= top * kwFloor)], K);
 }
 
 // Retrieval quality hint used by the X-ray honesty banner: nothing scored strongly.

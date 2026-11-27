@@ -1,18 +1,22 @@
 {
   "label": "in-sample-adjacent (questions written after reading the KB; see eval/gold.json protocol note)",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "keyword": {
-    "n": 30,
-    "recallAt1": 0.6,
-    "recallAt3": 0.73,
+    "n": 36,
+    "recallAt1": 0.61,
+    "recallAt3": 0.81,
     "byType": {
       "vocab": {
         "n": 11,
         "recallAt3": 1
       },
       "paraphrase": {
-        "n": 19,
-        "recallAt3": 0.58
+        "n": 20,
+        "recallAt3": 0.65
+      },
+      "plural": {
+        "n": 5,
+        "recallAt3": 1
       }
     },
     "misses": {
@@ -24,7 +28,9 @@
         "q": "How many days do I have to get my money back?",
         "type": "paraphrase",
         "top": [
-          "billing.refunds"
+          "billing.refunds",
+          "billing.trial",
+          "sales.roi"
         ],
         "hit3": true
       },
@@ -41,7 +47,8 @@
         "type": "paraphrase",
         "top": [
           "pricing.pro",
-          "pricing.business"
+          "pricing.business",
+          "pricing.discounts"
         ],
         "hit3": false
       },
@@ -50,7 +57,8 @@
         "type": "vocab",
         "top": [
           "billing.invoices",
-          "billing.proration"
+          "billing.proration",
+          "accounts.seats"
         ],
         "hit3": true
       },
@@ -60,7 +68,7 @@
         "top": [
           "billing.trial",
           "pricing.free",
-          "sales.roi"
+          "billing.payment"
         ],
         "hit3": true
       },
@@ -68,7 +76,8 @@
         "q": "Can I try Business before paying?",
         "type": "paraphrase",
         "top": [
-          "sales.roi"
+          "sales.roi",
+          "pricing.business"
         ],
         "hit3": false
       },
@@ -77,7 +86,7 @@
         "type": "paraphrase",
         "top": [
           "billing.proration",
-          "pricing.free",
+          "data.export",
           "pricing.discounts"
         ],
         "hit3": true
@@ -86,7 +95,8 @@
         "q": "Which cards do you take?",
         "type": "paraphrase",
         "top": [
-          "billing.payment"
+          "billing.payment",
+          "billing.trial"
         ],
         "hit3": true
       },
@@ -182,9 +192,9 @@
         "q": "Does it work with Microsoft Teams?",
         "type": "vocab",
         "top": [
-          "integrations.list",
           "sales.roi",
-          "accounts.sso"
+          "integrations.list",
+          "sales.convert"
         ],
         "hit3": true
       },
@@ -192,9 +202,11 @@
         "q": "Can I build my own integration?",
         "type": "paraphrase",
         "top": [
-          "integrations.connect"
+          "integrations.connect",
+          "integrations.list",
+          "integrations.api"
         ],
-        "hit3": false
+        "hit3": true
       },
       {
         "q": "I forgot my password",
@@ -228,9 +240,9 @@
         "q": "How do I add more people to my team?",
         "type": "paraphrase",
         "top": [
+          "pricing.enterprise",
           "security.hipaa",
-          "accounts.seats",
-          "pricing.enterprise"
+          "accounts.seats"
         ],
         "hit3": true
       },
@@ -256,7 +268,8 @@
         "q": "How fast do you respond on Business?",
         "type": "paraphrase",
         "top": [
-          "sales.differentiators"
+          "sales.differentiators",
+          "pricing.business"
         ],
         "hit3": false
       },
@@ -281,6 +294,60 @@
         "type": "paraphrase",
         "top": [
           "sales.fit"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "What plans do you offer?",
+        "type": "plural",
+        "top": [
+          "pricing.free",
+          "pricing.enterprise",
+          "pricing.pro"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Which integrations do you support?",
+        "type": "plural",
+        "top": [
+          "integrations.connect",
+          "support.channels",
+          "integrations.list"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "What are your refund policies?",
+        "type": "plural",
+        "top": [
+          "billing.refunds"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "How do invoices work?",
+        "type": "plural",
+        "top": [
+          "billing.invoices",
+          "billing.proration",
+          "accounts.seats"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "Do students get a discount?",
+        "type": "plural",
+        "top": [
+          "pricing.discounts"
+        ],
+        "hit3": true
+      },
+      {
+        "q": "I'm a college student, can I get the education discount?",
+        "type": "paraphrase",
+        "top": [
+          "pricing.discounts"
         ],
         "hit3": true
       }

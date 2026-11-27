@@ -1,5 +1,5 @@
 {
-  "_about": "Retrieval gold set. Protocol note: these questions were written by the same author who tuned the retriever, after reading the knowledge base, so every number computed on them is an in-sample-adjacent, optimistic bound. Held-out protocol: a second person writes 30 questions from the product spec alone (never the passages), they are stored in eval/heldout.json, and numbers from that file are reported separately as blind. 'type' is vocab (reuses passage wording), paraphrase (different wording), or miss (out of scope: the right behaviour is no confident match).",
+  "_about": "Retrieval gold set. Protocol note: these questions were written by the same author who tuned the retriever, after reading the knowledge base, so every number computed on them is an in-sample-adjacent, optimistic bound. Held-out protocol: a second person writes 30 questions from the product spec alone (never the passages), they are stored in eval/heldout.json, and numbers from that file are reported separately as blind. 'type' is vocab (reuses passage wording), paraphrase (different wording), or miss (out of scope: the right behaviour is no confident match). 'plural' (v3.2, audit N-06) asks with plural or inflected wording; 'targets' lists passages any one of which counts as a hit.",
   "items": [
     { "q": "How many days do I have to get my money back?", "target": "billing.refunds", "type": "paraphrase" },
     { "q": "What is your refund policy?", "target": "billing.refunds", "type": "vocab" },
@@ -31,6 +31,12 @@
     { "q": "Is there an outage right now?", "target": "support.status", "type": "paraphrase" },
     { "q": "How is Nimbus different from Asana?", "target": "sales.competitors", "type": "vocab" },
     { "q": "Who is this product for?", "target": "sales.fit", "type": "paraphrase" },
+    { "q": "What plans do you offer?", "targets": ["pricing.free", "pricing.pro", "pricing.business", "pricing.enterprise"], "type": "plural" },
+    { "q": "Which integrations do you support?", "target": "integrations.list", "type": "plural" },
+    { "q": "What are your refund policies?", "target": "billing.refunds", "type": "plural" },
+    { "q": "How do invoices work?", "target": "billing.invoices", "type": "plural" },
+    { "q": "Do students get a discount?", "target": "pricing.discounts", "type": "plural" },
+    { "q": "I'm a college student, can I get the education discount?", "target": "pricing.discounts", "type": "paraphrase" },
     { "q": "Do you sell hardware?", "target": null, "type": "miss" },
     { "q": "What's the weather in Denver?", "target": null, "type": "miss" },
     { "q": "Can I pay with cryptocurrency?", "target": null, "type": "miss" },

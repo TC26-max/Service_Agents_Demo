@@ -23,7 +23,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-tyEEJZDJqdKycCETYIzmc0qKCvtaO4Ca1BRrgYq3ARQ=' 'sha256-bgyxCyk5gXSlWkGSDwtPTx9nQQU5yJLho5pt83aUZVs=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report"
+          "value": "default-src 'self'; script-src 'self' 'sha256-tyEEJZDJqdKycCETYIzmc0qKCvtaO4Ca1BRrgYq3ARQ=' 'sha256-EWrGaMl6JKQl9n6Nbhc+RZQIBW8kKPVGWy88DySS1C4=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report"
         },
         {
           "key": "Strict-Transport-Security",

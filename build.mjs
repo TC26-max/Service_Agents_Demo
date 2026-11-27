@@ -38,7 +38,7 @@ const testedHtml = `
 ${nums}
 <div class="xhead">Retrieval numbers come from the shipped retriever module run over <code>eval/gold.json</code> at build time. The questions were written by the same person who tuned the retriever after reading the knowledge base, so they are an optimistic bound; a held-out protocol is described in the gold file. The hybrid number needs real embeddings and is measured with <code>npm run eval:live</code>.</div>
 ${fx.map(f => `<div class="find" id="${esc(f.id)}"><span class="sev ${esc(f.severity.toLowerCase())}">${esc(f.severity)}</span><b>${esc(f.id)}: ${esc(f.title)}</b><p>${esc(f.plain)}</p><span class="tn">${esc(f.technical)}</span><p><b>Before:</b> ${esc(f.before)} <b>After:</b> ${esc(f.after)} <b>Gate:</b> ${esc(f.gate)} <b>Status:</b> ${esc(f.status)}</p></div>`).join("\n")}
-<div class="xhead">Deliberately still open: the guard layer for the open N- findings (Phase 1), faithfulness and refusal numbers (needs a model budget), the held-out question set, and the live hybrid retrieval number.</div>`;
+<div class="xhead">Deliberately still open: live reruns of the prompt-level fixes (N-05, N-17), owner steps in the Vercel and Google dashboards (N-03, N-13, N-22), faithfulness and refusal numbers (needs a model budget), the held-out question set, and the live hybrid retrieval number.</div>`;
 
 // ---- page ----
 let html = R("src/index.template.html")
@@ -113,6 +113,7 @@ ${fx.map(f => `| ${f.id} | ${f.severity} | ${f.title} | ${f.before} | ${f.after}
 
 ## What changed, by area
 
+- v3.2 (AUDIT-2026-11-26, Phase 1): guard layer (lib/guard.mjs): invisible-character stripping and NFKC; signed assistant turns; fenced passages with a per-request code; output rules for card and credential requests, unknown contacts, card-like numbers, prompt recitation, images and the student discount; edits answered as checked JSON with a Uses your edit tag and the original passage in the drawer; plural stemming and guarded fusion; model-aware requests, a deep health canary and a daily canary workflow.
 - v3.1 (AUDIT-2026-11-26, Phase 0): limiter counts accepted requests only with a per-visitor daily share; request caps and no model call without a visitor message; malformed tokens and JSON answered as client errors; WAV-only voice; TOKEN_SECRET; only backend/public is served; security.txt, robots, sitemap, 404 page, CSP reporting, COOP and CORP; privacy note and example contact details; contrast tokens, inert intro, dialog drawer with focus return, phone composer in view with 44 px controls, landmarks and headings; citation lists; dead key code removed.
 - Backend: role whitelist, fixed error copy, capped and labelled visitor edits, TOP_K applied, limiter keyed on the platform client IP, server-issued ticket IDs, GET /api/health with the voice token, CORS allowlist, transcription token and lower ceiling, one shared retriever module.
 - Page: chat-first phone layout, reply filed to the bot that asked, queued suggestions, hidden dead controls, demo-account card, completion-claim guard and Handed off badge, Escape and deep links, version stamp, sister-project link, X-ray with all 36 passages, Tested page.
@@ -120,8 +121,8 @@ ${fx.map(f => `| ${f.id} | ${f.severity} | ${f.title} | ${f.before} | ${f.after}
 
 ## Deliberately still open
 
-- Phase 1 guard layer: N-02, N-04, N-06, N-08, N-13, N-16 (and the live reruns for N-05 and N-17)
-- Owner steps: Gemini paid tier (N-03), TOKEN_SECRET (N-22), the Vercel WAF rule (N-01, recommended)
+- Live reruns of the prompt-level fixes: N-05, N-17
+- Owner steps: Gemini paid tier (N-03), switching CHAT_MODEL (N-13), TOKEN_SECRET (N-22), the Vercel WAF rule (N-01, recommended)
 - Faithfulness and refusal numbers (the faithfulness checker exists behind FAITHFULNESS=1)
 - Held-out question set written by a second person
 - Live hybrid retrieval number
