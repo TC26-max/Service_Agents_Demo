@@ -15,10 +15,14 @@ for (const preset of ["mobile", "desktop"]) {
     const file = path.join(out, `${preset}-${i}.json`);
     const args = [...pre, H.base + "/", "--quiet", "--output=json", `--output-path=${file}`, "--only-categories=performance,accessibility,best-practices,seo", "--chrome-flags=--headless=new --no-sandbox --no-proxy-server --disable-gpu"];
     if (preset === "desktop") args.push("--preset=desktop");
-    try { await run(bin, args, { timeout: 300000, maxBuffer: 1 << 26 }); } catch (e) { C.ok(`${preset} run ${i + 1} completed`, false, String(e.stderr || e.message).slice(0, 300)); continue; }
+    // Lighthouse itself sometimes fails to record a trace (NO_NAVSTART and similar); that is retried, not scored
+    let ok = false, err = "";
+    for (let t = 0; t < 3 && !ok; t++) { try { await run(bin, args, { timeout: 300000, maxBuffer: 1 << 26 }); ok = true; } catch (e) { err = String(e.stderr || e.message).slice(0, 300); console.log(`(${preset} run ${i + 1}, attempt ${t + 1} failed: ${err.split("\n")[0]})`); } }
+    if (!ok) continue;
     const j = JSON.parse(fs.readFileSync(file, "utf8")); const sc = k => Math.round((j.categories[k] || {}).score * 100);
     rows.push({ perf: sc("performance"), a11y: sc("accessibility"), bp: sc("best-practices"), seo: sc("seo"), tbt: Math.round(j.audits["total-blocking-time"].numericValue), lcp: Math.round(j.audits["largest-contentful-paint"].numericValue), cls: +j.audits["cumulative-layout-shift"].numericValue.toFixed(3) });
   }
+  C.ok(`${preset}: at least ${Math.min(3, RUNS)} Lighthouse runs completed`, rows.length >= Math.min(3, RUNS), `${rows.length} of ${RUNS}`);
   if (!rows.length) continue;
   const perf = rows.map(r => r.perf).sort((a, b) => a - b)[Math.floor(rows.length / 2)];
   summary[preset] = { medianPerformance: perf, runs: rows };
