@@ -197,6 +197,15 @@ if (browser) {
     await p.mouse.move(5, 5); await p.focus("#send"); await p.keyboard.press("Shift+Tab"); await p.keyboard.press("Shift+Tab");
     let focusPop = false; for (let i = 0; i < 40 && !focusPop; i++) { focusPop = await p.evaluate(() => document.activeElement && document.activeElement.classList.contains("cite") && !document.getElementById("citePop").hidden); if (!focusPop) await p.keyboard.press("Shift+Tab"); }
     C.ok("P2 keyboard focus on a citation shows the same preview", focusPop);
+    // focusing a chip can scroll it into view: that scroll keeps a focused chip's preview, while it still closes a hover preview
+    const keptOnScroll = await p.evaluate(() => new Promise(r => { document.getElementById("chat").dispatchEvent(new Event("scroll"));
+      requestAnimationFrame(() => r(!document.getElementById("citePop").hidden && document.activeElement.classList.contains("cite"))); }));
+    C.ok("P2 a scroll keeps the preview of a keyboard-focused citation (WCAG 1.4.13)", keptOnScroll);
+    await p.focus("#send"); await p.hover("#chat .cite"); await wait(350);
+    const hoverScroll = await p.evaluate(() => new Promise(r => { const e = document.getElementById("citePop"), was = !e.hidden; document.getElementById("chat").dispatchEvent(new Event("scroll"));
+      requestAnimationFrame(() => r({ was, after: !e.hidden })); }));
+    C.ok("P2 a scroll still closes a hover preview", hoverScroll.was && !hoverScroll.after, JSON.stringify(hoverScroll));
+    await p.mouse.move(5, 5); await wait(200);
     await p.evaluate(() => document.querySelector("#chat .cite").click()); await wait(60);
     const dec = await p.evaluate(() => { const t = document.querySelector("#dPassageWrap .ptxt"); return { sr: (t.querySelector(".sr") || {}).textContent || "", ghost: !!document.querySelector(".morph") }; });
     await wait(900);
