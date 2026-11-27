@@ -6,8 +6,9 @@ Generated page plus four Vercel Node functions. Do not hand-edit `public/index.h
 backend/
   public/               the ONLY static root (vercel.json outputDirectory): built page, 404 page,
                         og-image.png, favicon.svg, favicon-32.png, llms.txt, robots.txt, sitemap.xml,
-                        .well-known/security.txt
-  api/chat.js           POST: hybrid RAG chat (SSE or JSON), and mode:"retrieve" (rank only)
+                        .well-known/security.txt, fonts/ (two subset web fonts and their OFL license)
+  api/chat.js           POST: hybrid RAG chat (SSE or JSON), and mode:"retrieve" (rank only); every
+                        response carries `timing`, and a retrieve carries `map` (see below)
   api/transcribe.js     POST: speech-to-text for WAV audio, requires the x-demo-token from /api/health
   api/health.js         GET: health, version, voice token; ?deep=1 adds the cached model canary
   api/csp-report.js     POST: CSP violation reports, logged as counts-only fields
@@ -16,12 +17,18 @@ backend/
   lib/limits.mjs        fair-use limiter shared by the functions (accepted requests only)
   lib/guard.mjs         guard layer: input cleaning, signed history, fenced passages, output rules
   lib/provider.mjs      provider presets, model-aware request bodies, the canary
+  lib/project.mjs       PCA of the passage embeddings for the X-ray's map (deterministic, cached per instance)
   personas/personas.json, personas/rules.json   the shipped prompts and the rules every prompt must contain
   kb.json               copied from ../kb.json at build (bundled into the chat function, not published)
   vercel.json           output directory, functions config, security headers (CSP pins the inline script hashes)
   version.json          version and build date (from ../version.json)
   ingest.mjs            optional: pre-bake kb-embeddings.json (ignored by git; embeddings are built on first request)
 ```
+
+## What the page reads besides the answer (v3.3)
+
+- `timing`: `embedMs` (question and context embedded; `cold: true` when the 36 passages were embedded first, on a cold instance), `rankMs` (cosine, keyword ranking and fusion), and for answers `firstTokenMs` (streams), `generateMs`, `tokensOut` with `tokensEstimated` (true when the provider reported no usage and the count is characters divided by four) and, for JSON answers with usage, `tokensIn`. A stream sends the retrieval timings with its first event and the rest with its last.
+- `map` (retrieve only): `points` (36 `{cid, x, y}` in about -1 to 1), `query` (`{x, y}`, may fall outside that range) and `kept` (the share of the variance the two components keep). Edited passages are projected from their edited vectors. The map is a picture; ranking always uses the full vectors.
 
 ## Environment
 

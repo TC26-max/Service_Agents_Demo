@@ -1,0 +1,67 @@
+name: ui-budget
+# v3.3 (Phase 2, Gate C of the November audit): the page must stay fast and accessible as it gets more visual.
+# lighthouse: median of five runs, Performance 95 or more on a phone and a desktop profile, Accessibility 100.
+# screens: the same screens captured from the base branch and from the pull request on one runner, diffed,
+# and attached to the run for review. The diff informs; it does not fail the pull request.
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/lh-budget.mjs
+        env:
+          LH_RUNS: 5
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse
+          path: dist/lighthouse/
+          if-no-files-found: ignore
+  screens:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Screens of this pull request
+        run: npm run build && node test/screens.mjs dist/screens-after
+      - name: Screens of the base branch, taken with this pull request's script
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git worktree add ../base "origin/$BASE_REF"
+          cp test/screens.mjs ../base/test/screens.mjs
+          cd ../base && npm ci && npx playwright install chromium && npm run build
+          node test/screens.mjs "$GITHUB_WORKSPACE/dist/screens-before"
+      - name: Diff
+        run: |
+          node test/screens-diff.mjs dist/screens-before dist/screens-after dist/screens-diff
+          cat dist/screens-diff/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens
+          path: |
+            dist/screens-before/
+            dist/screens-after/
+            dist/screens-diff/
+          if-no-files-found: ignore

@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.3.0 (2026-11-27)
+
+Phase 2 of AUDIT-2026-11-26.md: the visual upgrade, spent where retrieval happens, with Gate C kept (phone Lighthouse 95 or more, first load at most 100 KB compressed). Every animation is listed in the new `MOTION.md`.
+
+- Intro: real knowledge-base passages sit faintly behind the headline and an X-ray lens reveals them sharp under the pointer (Canvas 2D, repainting only the lens; a slow sweep on touch screens; a still reveal under reduced motion). The "Grounded" wordmark traces itself, the mark turns to glass on desktops (one WebGL1 shader, rendered only while the pointer moves), and the pipeline strip is one drawn line with a token travelling to the cited answer.
+- Chat: a citation previews its passage on hover or keyboard focus (dismissible with Escape); a click morphs the chip into the drawer header and the passage decodes into place, with the text given to screen readers at once; streamed words land with a 120 ms blur; switching bots plays a typewriter-grid wipe; view tabs use View Transitions.
+- Retrieval X-ray: a passage field of 36 tiles grouped by document that reorders on every query, with semantic and keyword evidence as two rings and the top 3 glowing and taking their seats; an embedding map (PCA of the real passage vectors, computed on the server) with the question dropping in and lines to its top 3; a latency HUD with embed, rank and generate times and tokens. The chat's "Show retrieval" box carries the same HUD.
+- Knowledge Base: a handbook mode beside the list, with CSS 3D page turns; "Open this page in the handbook" in the source drawer lands on the cited passage, highlighted.
+- Tested: findings as a case-file board with severity and status filters, and replay cards for the 16 live probes of Nov 26 (no model calls).
+- Everywhere: Archivo (weight and width axes) for headings and JetBrains Mono for scores and IDs, self-hosted subsets of 37 KB in all; SVG icons instead of emoji; a light film grain; one motion switch that follows prefers-reduced-motion until the visitor uses the toggle on the intro or in the header, and pauses every loop longer than 5 seconds.
+- Fixes found on the way: a fresh load of a shared deep link (#kb, #xray, #tested) opened the intro instead of the view; the intro's source card faded through low-contrast colors (now revealed by clipping); the Knowledge Base and Tested views are built when first opened, which keeps about 700 elements out of the first page.
+- Gates: gate-weight (first-load budget), 35 new UI checks, endpoint checks for timings and the map, static checks for the motion contract, replays, fonts and icons; a ui-budget workflow runs Lighthouse (median of five) and, on pull requests, a screenshot diff against the base branch. The test harness now serves compressed text, as the platform does.
+
 ## 3.2.0 (2026-11-26)
 
 Phase 1 of AUDIT-2026-11-26.md: a deterministic guard layer around the model (lib/guard.mjs), retrieval fixes, and a model canary.

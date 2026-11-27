@@ -1,6 +1,6 @@
 {
-  "version": "3.2.0",
-  "buildDate": "2026-11-26",
+  "version": "3.3.0",
+  "buildDate": "2026-11-27",
   "sisterUrl": "https://github.com/TC26-max",
   "sisterName": "Harlan & West IT Service Desk",
   "_about": "Single source for the version stamp, the build date shown on the page, and the sister-project link. Bump version and buildDate together; build.mjs reads only this file so builds are deterministic."

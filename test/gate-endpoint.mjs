@@ -236,4 +236,26 @@ C.ok("OWASP #10 markdown images are neutralized", o.guard?.includes("R-IMAGE") &
   const p25 = JSON.parse(payloadFor("gemini-2.5-flash", "s", [{ role: "user", content: "u" }], 400, false)), p35 = JSON.parse(payloadFor("gemini-3.5-flash-lite", "s", [{ role: "user", content: "u" }], 400, false));
   C.ok("N-13 Gemini 2.5 turns thinking off; Gemini 3 keeps its defaults with token headroom", p25.extra_body?.google?.thinking_config?.thinking_budget === 0 && !p35.extra_body && p35.temperature === undefined && p35.max_tokens >= 1024); }
 
+// ---- v3.3, Phase 2: the X-ray map and the latency HUD come from the server ----
+{ const q = async (body, ip) => (await post(body, ip)).json();
+  const r1 = await q({ mode: "retrieve", q: "my slack notifications stopped working" }, "10.9.1.1");
+  C.ok("P2 retrieve returns timings for embed and rank", r1.timing && typeof r1.timing.embedMs === "number" && typeof r1.timing.rankMs === "number" && typeof r1.timing.cold === "boolean", JSON.stringify(r1.timing));
+  C.ok("P2 retrieve returns a map of all 36 passages and the question", r1.map && r1.map.points.length === 36 && new Set(r1.map.points.map(p => p.cid)).size === 36 && Number.isFinite(r1.map.query.x) && Number.isFinite(r1.map.query.y));
+  C.ok("P2 map coordinates stay in range and say how much variance they keep", r1.map.points.every(p => Math.abs(p.x) <= 1.0001 && Math.abs(p.y) <= 1.0001) && r1.map.kept > 0 && r1.map.kept <= 1.0001, String(r1.map.kept));
+  const r2 = await q({ mode: "retrieve", q: "my slack notifications stopped working" }, "10.9.1.2");
+  C.ok("P2 the map is deterministic between calls", JSON.stringify(r2.map) === JSON.stringify(r1.map));
+  const r3 = await q({ mode: "retrieve", q: "refund", kbEdits: { "billing.refunds": "Slack Slack Slack refund refund" } }, "10.9.1.3");
+  const moved = r3.map.points.find(p => p.cid === "billing.refunds"), before = r1.map.points.find(p => p.cid === "billing.refunds");
+  C.ok("P2 an edited passage moves on the map, the rest stay put", (moved.x !== before.x || moved.y !== before.y) && r3.map.points.filter(p => p.cid !== "billing.refunds").every(p => { const b = r1.map.points.find(x => x.cid === p.cid); return b.x === p.x && b.y === p.y; }));
+  const j1 = await q({ bot: "support", messages: [{ role: "user", content: "refund policy?" }] }, "10.9.1.4");
+  C.ok("P2 a JSON answer carries embed, rank and generate timings with a token count", j1.timing && ["embedMs", "rankMs", "generateMs", "tokensOut"].every(k => typeof j1.timing[k] === "number") && typeof j1.timing.tokensEstimated === "boolean", JSON.stringify(j1.timing));
+  const st = await raw(base + "/api/chat", { method: "POST", headers: { "content-type": "application/json", "x-real-ip": "10.9.1.5" }, body: JSON.stringify({ bot: "support", stream: true, messages: [{ role: "user", content: "refund policy?" }] }) });
+  const evs = (await st.text()).split("\n\n").filter(x => x.startsWith("data:")).map(x => JSON.parse(x.slice(5)));
+  const first = evs.find(e => e.sources), done = evs.find(e => e.done);
+  C.ok("P2 a stream sends retrieval timings first and generation timings last", first && typeof first.timing.embedMs === "number" && done && typeof done.timing.firstTokenMs === "number" && typeof done.timing.generateMs === "number" && done.timing.tokensEstimated === true, JSON.stringify(done && done.timing));
+  const { pca2 } = await import(new URL("../backend/lib/project.mjs", import.meta.url).href);
+  const line = pca2([[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]]);
+  C.ok("P2 PCA keeps all the variance of points on a line, in order", Math.abs(line.kept - 1) < 1e-9 && line.points.map(p => p[0]).every((x, i, a) => i === 0 || Math.abs(x - a[i - 1]) > 0.1));
+}
+
 H.close(); C.done();

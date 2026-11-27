@@ -21,6 +21,10 @@
 // or they are dropped (N-08); passages are fenced with a per-request code; every reply passes the
 // output rules before it is final, and a request carrying visitor edits is answered without streaming
 // so nothing unchecked reaches the screen (N-02, N-04, N-05).
+//
+// v3.3 (Phase 2): every response carries `timing` (embed, rank, first token, generate; tokens when the
+// provider reports them, otherwise an estimate marked as one), and a retrieve call carries `map`, a 2D
+// projection of the passage embeddings (lib/project.mjs) for the X-ray, cached per warm instance.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +33,7 @@ import { clientIp, readJsonBody } from "../lib/security.mjs";
 import { makeLimiter } from "../lib/limits.mjs";
 import { cleanText, signTurn, verifyTurn, newFence, fence, FENCE_RULE, makeOutputGuard } from "../lib/guard.mjs";
 import { PROVIDER, API_BASE, KEY, EMBED_MODEL, CHAT_MODELS, payloadFor } from "../lib/provider.mjs";
+import { pca2 } from "../lib/project.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 function loadJSON(name) {
@@ -101,6 +106,9 @@ async function getCorpusEmbeddings() {
   EMB_CACHE = FLAT.map((c, i) => ({ cid: c.cid, vector: vecs[i] }));
   return EMB_CACHE;
 }
+let MAP = null; // PCA of the 36 corpus vectors, built once per warm instance (v3.3)
+const mapModel = base => (MAP || (MAP = pca2(base.map(e => e.vector))));
+const ms = (a, b) => +(b - a).toFixed(a === b ? 0 : 1);
 class ProviderError extends Error { constructor(stage, status, body) { super(`${stage} ${status}`); this.stage = stage; this.status = status; this.body = String(body || "").slice(0, 600); } }
 async function chat(system, messages, max = MAX_TOKENS, meta = null) {
   const live = CHAT_MODELS.filter(m => !DEAD.has(m)); let last = null;
@@ -115,15 +123,15 @@ async function chat(system, messages, max = MAX_TOKENS, meta = null) {
   }
   throw last || new ProviderError("chat", 0, "no model available");
 }
-async function streamChat(res, system, messages, retr, ticket, finalize) {
+async function streamChat(res, system, messages, retr, ticket, finalize, timing = {}) {
   const live = CHAT_MODELS.filter(m => !DEAD.has(m)); if (!live.length) return false;
-  const model = live[RR % live.length]; let r;
+  const model = live[RR % live.length]; let r; const tReq = performance.now(); let tFirst = 0;
   try { r = await fetch(API_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + KEY }, body: payloadFor(model, system, messages, MAX_TOKENS, true) }); }
   catch (e) { return false; }
   if (!r.ok || !r.body) { const b = (await r.text().catch(() => "")) || ""; if (r.status === 404 || /limit:\s*0/.test(b)) DEAD.add(model); RR = (RR + 1) % live.length; return false; }
   res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform" });
   const push = o => { try { res.write("data: " + JSON.stringify(o) + "\n\n"); } catch (e) {} };
-  push({ sources: retr, ticket });
+  push({ sources: retr, ticket, timing });
   const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", sent = 0, outChars = 0, full = "";
   try {
     while (true) {
@@ -132,22 +140,23 @@ async function streamChat(res, system, messages, retr, ticket, finalize) {
       while ((i = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
         if (!line.startsWith("data:")) continue; const data = line.slice(5).trim(); if (!data || data === "[DONE]") continue;
-        try { const t = JSON.parse(data).choices?.[0]?.delta?.content; if (t) { sent++; outChars += t.length; full += t; push({ t }); } } catch (e) {}
+        try { const t = JSON.parse(data).choices?.[0]?.delta?.content; if (t) { if (!sent) tFirst = performance.now(); sent++; outChars += t.length; full += t; push({ t }); } } catch (e) {}
       }
     }
   } catch (e) { push({ error: "stream interrupted" }); }
   if (!sent) { push({ error: "empty stream" }); push({ done: true, faithful: null, ticket }); try { res.end(); } catch (e) {} return { outChars, rules: [] }; }
-  const g = finalize(full);
+  const g = finalize(full); const tEnd = performance.now();
   if (g.text !== full.trim()) push({ replace: g.text });
-  push({ done: true, faithful: null, ticket, sig: g.sig, guard: g.rules }); try { res.end(); } catch (e) {}
+  const gen = { firstTokenMs: ms(tReq, tFirst || tEnd), generateMs: ms(tReq, tEnd), tokensOut: Math.max(1, Math.round(outChars / 4)), tokensEstimated: true };
+  push({ done: true, faithful: null, ticket, sig: g.sig, guard: g.rules, timing: { ...timing, ...gen } }); try { res.end(); } catch (e) {}
   return { outChars, rules: g.rules };
 }
 
 // ---- visitor KB edits: capped, labelled, session-only, module state never mutated ----
 const EDIT_MAX = 3, EDIT_CHARS = 240;
 async function withEdits(kbEdits) {
-  const base = await getCorpusEmbeddings();
-  const plain = { corpus: base, textFor: cid => BYID[cid], overrides: null, edited: [], stripped: 0 };
+  const cold = !EMB_CACHE; const base = await getCorpusEmbeddings();
+  const plain = { corpus: base, textFor: cid => BYID[cid], overrides: null, edited: [], stripped: 0, cold };
   if (!kbEdits || typeof kbEdits !== "object" || Array.isArray(kbEdits)) return plain;
   const cids = Object.keys(kbEdits).filter(c => BYID[c] && typeof kbEdits[c] === "string" && kbEdits[c].trim() && kbEdits[c].trim() !== BYID[c].text).slice(0, EDIT_MAX);
   if (!cids.length) return plain;
@@ -158,7 +167,7 @@ async function withEdits(kbEdits) {
   return {
     corpus: base.map(e => vmap.has(e.cid) ? { cid: e.cid, vector: vmap.get(e.cid) } : e),
     textFor: cid => (texts[cid] != null ? { ...BYID[cid], text: texts[cid], edited: true } : BYID[cid]),
-    overrides, edited: cids, stripped
+    overrides, edited: cids, stripped, cold
   };
 }
 function ticketId() { let d = ""; while (d.length < 5) d += Math.floor(Math.random() * 10); if (/^(\d)\1{4}$|01234|12345|00000/.test(d)) d = String(10000 + Math.floor(Math.random() * 89999)); return "NIM-" + d; }
@@ -188,16 +197,20 @@ export default async function handler(req, res) {
   if (!LIMIT.check(clientIp(req)).ok) { res.status(429).json({ error: FAIR_USE_MSG }); return; }
   try {
     if (body.mode === "retrieve") {
-      const q = String(body.q || "").slice(0, 500).trim();
+      const q = String(body.q || "").slice(0, 500).trim(); const t0 = performance.now();
       const eff = await withEdits(body.kbEdits);
-      const v = await embed(q);
+      const v = await embed(q); const t1 = performance.now();
       const sem = eff.corpus.map(e => ({ cid: e.cid, s: cosine(v, e.vector) })).sort((a, b) => b.s - a.s);
       const kw = keywordRank(q, KINDEX, 12, eff.overrides);
       const fused = fuseHybrid(sem.slice(0, 12), kw); const fmap = new Map(fused.map(f => [f.cid, f.s]));
       const results = FLAT.map(c => { const se = sem.find(x => x.cid === c.cid), kk = kw.find(x => x.cid === c.cid);
         return { ...eff.textFor(c.cid), sem: se ? +se.s.toFixed(4) : null, kw: kk ? +kk.s.toFixed(3) : null, fused: +(fmap.get(c.cid) || 0).toFixed(4) }; })
         .sort((a, b) => (b.fused - a.fused) || ((b.sem || 0) - (a.sem || 0))).map((c, i) => ({ rank: i + 1, ...c }));
-      res.status(200).json({ query: q, method: "hybrid (semantic embeddings + keyword tf-idf, reciprocal rank fusion)" + (eff.edited.length ? ` with ${eff.edited.length} visitor-edited passage${eff.edited.length > 1 ? "s" : ""} applied` : ""), results, fusedCount: fused.length, version: VERSION });
+      const t2 = performance.now();
+      const mm = mapModel(await getCorpusEmbeddings()); const pt = vec => mm.project(vec).map(x => +x.toFixed(4));
+      const map = { kept: +mm.kept.toFixed(3), points: eff.corpus.map(e => { const [x, y] = pt(e.vector); return { cid: e.cid, x, y }; }), query: (([x, y]) => ({ x, y }))(pt(v)) };
+      res.status(200).json({ query: q, method: "hybrid (semantic embeddings + keyword tf-idf, reciprocal rank fusion)" + (eff.edited.length ? ` with ${eff.edited.length} visitor-edited passage${eff.edited.length > 1 ? "s" : ""} applied` : ""), results, fusedCount: fused.length,
+        timing: { embedMs: ms(t0, t1), rankMs: +(t2 - t1).toFixed(2), cold: !!eff.cold }, map, version: VERSION });
       return;
     }
 
@@ -206,16 +219,18 @@ export default async function handler(req, res) {
     const lastAnswer = [...messages].reverse().find(m => m.role === "assistant");
     const qCtx = (userTurns.join("\n") + (lastAnswer ? "\n" + lastAnswer.content : "")).trim().slice(0, 2000);
 
-    let retr = []; let eff = { edited: [], stripped: 0 };
+    let retr = []; let eff = { edited: [], stripped: 0 }; const timing = {}; const t0 = performance.now();
     if (lastUser) {
       eff = await withEdits(body.kbEdits);
       const topFor = async (text, boost) => { const v = await embed(text); return eff.corpus.map(e => ({ cid: e.cid, score: cosine(v, e.vector) * boost })).sort((a, b) => b.score - a.score).slice(0, 8); };
       const runs = [topFor(lastUser, 1.08)]; if (qCtx && qCtx !== lastUser) runs.push(topFor(qCtx, 1.0));
       const best = new Map(); (await Promise.all(runs)).flat().forEach(x => { if (!best.has(x.cid) || x.score > best.get(x.cid)) best.set(x.cid, x.score); });
+      const t1 = performance.now();
       const semList = [...best.entries()].map(([cid, s]) => ({ cid, s })).sort((a, b) => b.s - a.s);
       const kwList = keywordRank(lastUser, KINDEX, 8, eff.overrides);
       retr = fuseHybrid(semList, kwList).slice(0, TOPK).map(f => { const semS = best.get(f.cid); const inKw = kwList.some(x => x.cid === f.cid);
         return { ...eff.textFor(f.cid), score: typeof semS === "number" ? +semS.toFixed(4) : null, match: typeof semS === "number" ? (inKw ? "hybrid" : "semantic") : "keyword" }; });
+      Object.assign(timing, { embedMs: ms(t0, t1), rankMs: +(performance.now() - t1).toFixed(2), cold: !!eff.cold });
     }
     const ticket = ticketId(); const code = newFence();
     const system = PERSONAS[bot] + "\n\n# TICKET\nIf you escalate in this reply, use exactly this ticket ID: " + ticket +
@@ -227,9 +242,11 @@ export default async function handler(req, res) {
 
     const inChars = system.length + messages.reduce((n, m) => n + m.content.length, 0);
     // a reply that may draw on visitor-edited text is checked in full before anything is shown (no streaming)
-    if (body.stream === true && !eff.edited.length) { const streamed = await streamChat(res, system, messages, retr, ticket, finalize); if (streamed) { logUsage({ bot, stream: true, turns: messages.length, inChars, outChars: streamed.outChars }); return; } }
-    const meta = {};
-    const raw = await chat(system, messages, MAX_TOKENS, meta);
+    if (body.stream === true && !eff.edited.length) { const streamed = await streamChat(res, system, messages, retr, ticket, finalize, timing); if (streamed) { logUsage({ bot, stream: true, turns: messages.length, inChars, outChars: streamed.outChars }); return; } }
+    const meta = {}; const tg = performance.now();
+    const raw = await chat(system, messages, MAX_TOKENS, meta); timing.generateMs = ms(tg, performance.now());
+    if (meta.usage && meta.usage.completion_tokens) Object.assign(timing, { tokensIn: meta.usage.prompt_tokens, tokensOut: meta.usage.completion_tokens, tokensEstimated: false });
+    else Object.assign(timing, { tokensOut: Math.max(1, Math.round(raw.length / 4)), tokensEstimated: true });
     logUsage({ bot, stream: false, turns: messages.length, inChars, outChars: raw.length, ...(meta.usage ? { promptTokens: meta.usage.prompt_tokens, completionTokens: meta.usage.completion_tokens } : {}) });
     const fin = finalize(raw); const answer = fin.text;
     let faithful = null;
@@ -237,7 +254,7 @@ export default async function handler(req, res) {
       const v = (await chat("You verify whether an answer is supported by sources. Reply only SUPPORTED or UNSUPPORTED.", [{ role: "user", content: "SOURCES:\n" + sourcesBlock(retr) + "\n\nANSWER:\n" + answer }], 16)).toUpperCase();
       faithful = !v.includes("UNSUPPORTED");
     }
-    res.status(200).json({ answer, sources: retr, faithful, ticket, sig: fin.sig, guard: fin.rules, version: VERSION });
+    res.status(200).json({ answer, sources: retr, faithful, ticket, sig: fin.sig, guard: fin.rules, timing, version: VERSION });
   } catch (e) {
     if (res.headersSent) { try { res.end(); } catch (x) {} return; }
     clientError(res, e);
