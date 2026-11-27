@@ -75,4 +75,22 @@ C.ok("finding ids are unique", new Set(findings.map(f => f.id)).size === finding
 C.ok("FIXES-APPLIED generated for this build date", fs.existsSync(path.join(ROOT, `FIXES-APPLIED-${JSON.parse(R("version.json")).buildDate}.md`)));
 C.ok("sister project cross-linked in page and README", /Harlan/.test(built) && /Harlan/.test(readme));
 C.ok("gold set and results present", fs.existsSync(path.join(ROOT, "eval/gold.json")) && fs.existsSync(path.join(ROOT, "eval/results.json")));
+
+// 10. v3.3 (Phase 2): the motion contract, the replay cards, the fonts and the icons
+const motionDoc = R("MOTION.md"); const tpl = R("src/index.template.html");
+const keyframes = [...new Set([...tpl.matchAll(/@keyframes\s+([A-Za-z0-9_-]+)/g)].map(m => m[1]))];
+const undocumented = keyframes.filter(k => !motionDoc.includes("`" + k + "`"));
+C.ok("every @keyframes animation in the page is listed in MOTION.md", keyframes.length >= 10 && undocumented.length === 0, undocumented.join(", "));
+C.ok("MOTION.md states the switch, the pause rule and the flash rule", /prefers-reduced-motion/.test(motionDoc) && /2\.2\.2/.test(motionDoc) && /2\.3\.1/.test(motionDoc));
+const replayData = JSON.parse(R("redteam-replays.json")).replays; const findingIds = new Set(findings.map(f => f.id));
+C.ok("16 live-probe replays: 14 chat and 2 voice", replayData.length === 16 && replayData.filter(r => r.channel === "chat").length === 14 && replayData.filter(r => r.channel === "voice").length === 2);
+C.ok("every replay has a verdict and cites a real finding or none", replayData.every(r => /^(held|broke)$/.test(r.verdict) && (r.finding === null || findingIds.has(r.finding))), replayData.filter(r => r.finding && !findingIds.has(r.finding)).map(r => r.finding).join(","));
+C.ok("the built page carries all 16 replay cards and a case card per finding", (built.match(/class="rcard"/g) || []).length === 16 && (built.match(/<article class="find"/g) || []).length === findings.length);
+const fontsDir = path.join(ROOT, "backend", "public", "fonts"), fontFiles = ["archivo-display.woff2", "jetbrains-mono-500.woff2"];
+C.ok("both subset fonts and their license are published", fontFiles.concat("OFL.txt").every(f => fs.existsSync(path.join(fontsDir, f))));
+const fontBytes = fontFiles.reduce((n, f) => n + (fs.existsSync(path.join(fontsDir, f)) ? fs.statSync(path.join(fontsDir, f)).size : 0), 0);
+C.ok("font subsets total 30 to 60 KB", fontBytes >= 30 * 1024 && fontBytes <= 60 * 1024, `${fontBytes} bytes`);
+C.ok("no third-party scripts, styles or fonts (everything self-hosted)", !/<(script|link)[^>]+(src|href)="https?:/i.test(built) && !/url\((["']?)https?:/i.test(built));
+const emoji = built.match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu) || [];
+C.ok("interface icons are SVG, not emoji (only the sales greeting waves)", emoji.length <= 1 && (emoji.length === 0 || /Hey! \u{1F44B}/u.test(built)), emoji.join(" "));
 C.done();

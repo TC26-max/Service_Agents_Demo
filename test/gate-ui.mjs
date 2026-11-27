@@ -152,8 +152,8 @@ if (browser) {
     await c.close(); }
   // N-19: the intro's animation stops once the visitor is in
   { const c = await realCtx(); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await p.click("#enterBtn"); await wait(700);
-    const flips = await p.evaluate(() => new Promise(res => { let n = 0; const mo = new MutationObserver(m => n += m.length); document.querySelectorAll("#pipe .ps").forEach(x => mo.observe(x, { attributes: true })); setTimeout(() => { mo.disconnect(); res(n); }, 2200); }));
-    C.ok("N-19 intro animation stops after entering", flips === 0, `${flips} class changes in 2.2 s`);
+    const flips = await p.evaluate(() => new Promise(res => { let n = 0; const f0 = window.__coverFrames || 0; const mo = new MutationObserver(m => n += m.length); mo.observe(document.getElementById("pipe"), { attributes: true, subtree: true }); setTimeout(() => { mo.disconnect(); res({ n, frames: (window.__coverFrames || 0) - f0 }); }, 2200); }));
+    C.ok("N-19 intro animation stops after entering (pipeline, lens, glass, demo chat)", flips.n === 0 && flips.frames === 0, JSON.stringify(flips));
     await c.close(); }
   // N-14: phones keep the composer in the first screen; every control is at least 44 px
   for (const vp of [{ width: 375, height: 667 }, { width: 390, height: 844 }, { width: 360, height: 740 }]) {
@@ -166,6 +166,110 @@ if (browser) {
     C.ok(`N-14 ${vp.width}x${vp.height}: no horizontal overflow`, !m.overflow);
     if (vp.width === 375) { const v = await axeSerious(p); C.ok("N-11/N-23 axe: no serious issues on a phone", v.length === 0, v.join(", ")); }
     await c.close(); }
+  // ---- v3.3, audit 2026-11-26 (Phase 2, Gate C): the visual layer ----
+  // (each block below carries its own platform IP header, so the fair-use limiter counts it separately)
+  { const c = await realCtx(); await c.setExtraHTTPHeaders({ "x-real-ip": "10.77.0.1" }); const p = await c.newPage(); const errors = []; p.on("pageerror", e => errors.push(String(e))); p.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+    await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await wait(700);
+    // the lens and the glass mark render under a mouse, and only then
+    const f0 = await p.evaluate(() => window.__coverFrames || 0); await wait(600); const idleFrames = (await p.evaluate(() => window.__coverFrames || 0)) - f0;
+    await p.mouse.move(200, 200); await wait(400); await p.mouse.move(640, 300, { steps: 10 }); await wait(500);
+    const lens = await p.evaluate(() => { const c = document.getElementById("lens"); const g = c.getContext("2d"); const d = g.getImageData(Math.round(640 * c.width / innerWidth), Math.round(300 * c.height / innerHeight), 1, 1).data; return { alpha: d[3], frames: window.__coverFrames, w: c.width }; });
+    C.ok("P2 the X-ray lens draws real passages under the pointer", lens.alpha > 0 && lens.frames > f0, JSON.stringify(lens));
+    C.ok("P2 the intro renders no frames while nothing moves (pipeline steps aside)", idleFrames <= 3, `${idleFrames} frames in 0.6 s`);
+    C.ok("P2 the display font is loaded for the intro; the mono font is not needed yet", await p.evaluate(async () => { await document.fonts.ready; const a = [...document.fonts].find(f => /Archivo/.test(f.family)), m = [...document.fonts].find(f => /JetBrains/.test(f.family)); return !!a && a.status === "loaded" && (!m || m.status === "unloaded"); }));
+    C.ok("P2 the grain layer never takes a click", await p.evaluate(() => { const e = document.elementFromPoint(innerWidth / 2, 20); return !!e && e !== document.body && getComputedStyle(document.body, "::after").pointerEvents === "none"; }));
+    // the motion switch: intro button, header button, saved choice, everything stops
+    await p.click("#coverMotion"); await wait(200);
+    const off = await p.evaluate(() => ({ attr: document.documentElement.getAttribute("data-motion"), saved: localStorage.getItem("g-motion"), cover: document.getElementById("coverMotion").getAttribute("aria-pressed"), head: document.getElementById("motionBtn").getAttribute("aria-pressed") }));
+    C.ok("P2 the intro's motion toggle pauses all motion and is remembered", off.attr === "reduce" && off.saved === "reduce" && off.cover === "true" && off.head === "true", JSON.stringify(off));
+    const still = await p.evaluate(() => new Promise(res => { const f = window.__coverFrames; setTimeout(() => res({ frames: window.__coverFrames - f, running: document.getAnimations().filter(a => a.playState === "running" && a.effect && a.effect.getTiming().iterations === Infinity).length, lit: document.querySelectorAll("#pipe .ps.on").length }), 2500); }));
+    C.ok("P2 paused: no intro frames, no endless animation, every pipeline stage shown", still.frames <= 1 && still.running === 0 && still.lit === 5, JSON.stringify(still));
+    await p.click("#coverMotion"); await wait(150);
+    C.ok("P2 motion comes back on from the same toggle", await p.evaluate(() => document.documentElement.getAttribute("data-motion") === "full" && localStorage.getItem("g-motion") === "full"));
+    await p.click("#enterBtn"); await wait(600);
+    // streamed words, the citation preview (hover, focus, Escape), the morph and the decode
+    await p.fill("#input", "What is your refund policy?"); await p.click("#send"); await wait(1500);
+    await p.hover("#chat .cite"); await wait(350);
+    const pop = await p.evaluate(() => { const e = document.getElementById("citePop"), b = document.querySelector("#chat .cite"); return { shown: !e.hidden, text: e.textContent, desc: b.getAttribute("aria-describedby") }; });
+    C.ok("P2 hovering a citation previews its passage", pop.shown && /Refund policy/.test(pop.text) && /14 days/.test(pop.text) && pop.desc === "citePop", JSON.stringify(pop).slice(0, 200));
+    await p.keyboard.press("Escape"); await wait(80);
+    C.ok("P2 Escape dismisses the preview (WCAG 1.4.13)", await p.evaluate(() => document.getElementById("citePop").hidden && !document.querySelector("#chat .cite").hasAttribute("aria-describedby")));
+    await p.mouse.move(5, 5); await p.focus("#send"); await p.keyboard.press("Shift+Tab"); await p.keyboard.press("Shift+Tab");
+    let focusPop = false; for (let i = 0; i < 40 && !focusPop; i++) { focusPop = await p.evaluate(() => document.activeElement && document.activeElement.classList.contains("cite") && !document.getElementById("citePop").hidden); if (!focusPop) await p.keyboard.press("Shift+Tab"); }
+    C.ok("P2 keyboard focus on a citation shows the same preview", focusPop);
+    await p.evaluate(() => document.querySelector("#chat .cite").click()); await wait(60);
+    const dec = await p.evaluate(() => { const t = document.querySelector("#dPassageWrap .ptxt"); return { sr: (t.querySelector(".sr") || {}).textContent || "", ghost: !!document.querySelector(".morph") }; });
+    await wait(900);
+    const settled = await p.evaluate(() => { const t = document.querySelector("#dPassageWrap .ptxt"); return { plain: t.children.length === 0, text: t.textContent, ghost: !!document.querySelector(".morph") }; });
+    C.ok("P2 the drawer gives screen readers the passage at once and the decode settles to plain text", /refundable within 14 days/.test(dec.sr) && settled.plain && /refundable within 14 days/.test(settled.text), JSON.stringify({ dec, settled }).slice(0, 220));
+    C.ok("P2 the chip-to-drawer morph runs and cleans up", dec.ghost && !settled.ghost);
+    // open in the handbook: the cited page, highlighted, focused; pages turn by button and arrow key
+    await p.click("#dBook"); await wait(400);
+    const bk = await p.evaluate(() => ({ view: document.getElementById("kbview").classList.contains("show"), mark: (document.querySelector("#spread mark") || {}).textContent || "", focus: document.activeElement && document.activeElement.closest(".page") ? document.activeElement.closest(".page").dataset.cid : "", pos: document.getElementById("bkPos").textContent }));
+    C.ok("P2 'open in the handbook' lands on the cited page, highlighted and focused", bk.view && /14 days/.test(bk.mark) && bk.focus === "billing.refunds", JSON.stringify(bk));
+    await p.click("#bkNext"); await wait(900); const pos1 = await p.evaluate(() => document.getElementById("bkPos").textContent);
+    await p.keyboard.press("ArrowLeft"); await wait(900); const pos2 = await p.evaluate(() => document.getElementById("bkPos").textContent);
+    C.ok("P2 pages turn forward by button and back by arrow key", pos1 !== bk.pos && pos2 === bk.pos, `${bk.pos} | ${pos1} | ${pos2}`);
+    C.ok("P2 the page turn leaves no leaf behind", await p.evaluate(() => !document.querySelector(".leaf")));
+    // the Retrieval X-ray: field, seats, map, HUD
+    await p.click('#viewseg button[data-view="xray"]'); await wait(500);
+    const pre = await p.evaluate(() => ({ tiles: document.querySelectorAll("#field .tile").length, stops: [...document.querySelectorAll("#field .tile")].filter(t => t.tabIndex === 0).length }));
+    C.ok("P2 the passage field shows all 36 passages with one tab stop", pre.tiles === 36 && pre.stops === 1, JSON.stringify(pre));
+    await p.fill("#xq", "my slack notifications stopped working"); await p.click("#xgo"); await wait(1400);
+    const xr = await p.evaluate(() => { const tiles = [...document.querySelectorAll("#field .tile")]; const items = [...document.querySelectorAll("#xrayview .xitem .xd")].slice(0, 3).map(e => e.textContent);
+      return { order: tiles.slice(0, 3).map(t => +t.dataset.rank), ranks: tiles.map(t => +t.dataset.rank), top: document.querySelectorAll("#field .tile.top").length, seats: [...document.querySelectorAll("#seats .seat.filled")].map(s => s.textContent), items,
+        pts: document.querySelectorAll("#mapBox svg .pt").length, lines: document.querySelectorAll("#mapBox svg .ln").length, q: document.querySelectorAll("#mapBox svg .q").length, hud: document.getElementById("xhud").textContent }; });
+    C.ok("P2 Rank reorders the field by rank and the top 3 glow", xr.ranks.every((r, i) => r === i + 1) && xr.top === 3, JSON.stringify(xr.ranks.slice(0, 6)));
+    C.ok("P2 the top 3 take their seats, in the list's order", xr.seats.length === 3 && xr.seats.every((s, i) => s.includes(xr.items[i].split(", ")[1] || "@@")), JSON.stringify(xr.seats));
+    C.ok("P2 the embedding map shows 36 passages, the question and lines to the top 3", xr.pts === 36 && xr.q === 1 && xr.lines === 3, JSON.stringify({ pts: xr.pts, q: xr.q, lines: xr.lines }));
+    C.ok("P2 the latency HUD reports embed and rank times and no generation", /embed/.test(xr.hud) && /rank and fuse/.test(xr.hud) && /generate none/.test(xr.hud), xr.hud);
+    await p.focus("#field .tile[tabindex='0']"); await p.keyboard.press("ArrowRight"); await p.keyboard.press("ArrowDown");
+    C.ok("P2 arrow keys move through the field", await p.evaluate(() => { const t = [...document.querySelectorAll("#field .tile")]; return t.indexOf(document.activeElement) === 7 && t.filter(x => x.tabIndex === 0).length === 1; }));
+    // the chat's retrieval box carries the HUD; a picker switch plays one wipe, a second within a second does not
+    await p.click('#viewseg button[data-view="chat"]'); await wait(400);
+    await p.check("#ctxToggle"); await p.fill("#input", "How do invoices work?"); await p.click("#send"); await wait(1500);
+    C.ok("P2 the retrieval box shows embed, rank, first word and generate times", await p.evaluate(() => { const h = [...document.querySelectorAll("#chat .ctx .hud")].at(-1); return !!h && /embed/.test(h.textContent) && /first word/.test(h.textContent) && /generate/.test(h.textContent) && /tokens out/.test(h.textContent); }));
+    await p.click('.toolcard[data-bot="sales"]'); await wait(120);
+    const w1 = await p.evaluate(() => !!document.querySelector(".chatcard .wipe")); await wait(150);
+    await p.click('.toolcard[data-bot="support"]'); await wait(60);
+    const w2 = await p.evaluate(() => document.querySelectorAll(".chatcard .wipe").length); await wait(900);
+    C.ok("P2 a bot switch plays one wipe and rate-limits the next", w1 && w2 <= 1 && await p.evaluate(() => !document.querySelector(".chatcard .wipe") && active === "support"), `${w1} ${w2}`);
+    // the Tested board: filters and replays
+    await p.click('#viewseg button[data-view="tested"]'); await wait(500);
+    await p.click('.cfbar button[data-v="high"]'); await wait(80);
+    const t1 = await p.evaluate(() => ({ shown: [...document.querySelectorAll(".cases .find")].filter(x => !x.hidden).length, txt: document.querySelector(".cfcount").textContent }));
+    await p.click('.cfbar button[data-f="st"][data-v="pending"]'); await wait(80);
+    const t2 = await p.evaluate(() => [...document.querySelectorAll(".cases .find")].filter(x => !x.hidden).every(x => x.dataset.sev === "high" && x.dataset.st === "pending"));
+    await p.click('.cfbar button[data-f="sev"][data-v="all"]'); await p.click('.cfbar button[data-f="st"][data-v="all"]'); await wait(80);
+    C.ok("P2 the case board filters by severity and status", t1.shown === 11 && /Showing 11 of/.test(t1.txt) && t2 && await p.evaluate(n => [...document.querySelectorAll(".cases .find")].filter(x => !x.hidden).length === n, NFIND), JSON.stringify(t1));
+    await p.click(".rcard .rplay"); await wait(100);
+    C.ok("P2 16 replay cards, and Replay replays one", await p.evaluate(() => document.querySelectorAll(".rcard").length === 16 && document.querySelector(".rcard").classList.contains("play")));
+    C.ok("P2 no script errors across the visual layer", errors.length === 0, errors.slice(0, 2).join(" | "));
+    await c.close(); }
+  // reduced motion from the system: nothing loops, the lens is a still reveal, tabs and bots swap at once
+  { const c = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce", extraHTTPHeaders: { "x-real-ip": "10.77.0.2" } }); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await wait(2600);
+    const r = await p.evaluate(() => ({ attr: document.documentElement.getAttribute("data-motion"), frames: window.__coverFrames || 0, endless: document.getAnimations().filter(a => a.playState === "running" && a.effect && a.effect.getTiming().iterations === Infinity).length, demo: document.querySelectorAll("#cdemoBody .cd-row").length, pressed: document.getElementById("coverMotion").getAttribute("aria-pressed") }));
+    C.ok("P2 prefers-reduced-motion: no loops, a still intro, the toggle shows paused", r.attr === "reduce" && r.frames <= 1 && r.endless === 0 && r.demo === 2 && r.pressed === "true", JSON.stringify(r));
+    await p.click("#enterBtn"); await wait(300); await p.click('.toolcard[data-bot="sales"]'); await wait(30);
+    C.ok("P2 reduced motion: the bot switches at once, with no wipe", await p.evaluate(() => !document.querySelector(".wipe") && active === "sales"));
+    await c.close(); }
+  // phones: the field keeps 44 px targets and the handbook shows one page
+  { const c = await browser.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true, extraHTTPHeaders: { "x-real-ip": "10.77.0.3" } }); const p = await c.newPage(); await p.goto(B + "/#xray"); await wait(600);
+    C.ok("P2 a fresh load of a shared deep link opens that view, not the intro", await p.evaluate(() => document.body.classList.contains("entered") && document.getElementById("xrayview").classList.contains("show") && location.hash === "#xray"));
+    await p.fill("#xq", "refund"); await p.click("#xgo"); await wait(1200);
+    const m = await p.evaluate(() => { const t = [...document.querySelectorAll("#field .tile")].map(e => e.getBoundingClientRect()); return { min: Math.min(...t.map(r => Math.min(r.width, r.height))), overflow: document.documentElement.scrollWidth > innerWidth }; });
+    C.ok("P2 phone: X-ray tiles stay at least 44 px with no sideways scroll", m.min >= 44 && !m.overflow, JSON.stringify(m));
+    await p.goto(B + "/#kb"); await wait(500); await p.click('.kbmode button[data-m="book"]'); await wait(300);
+    C.ok("P2 phone: the handbook shows one page at a time", await p.evaluate(() => /^Page \d+ of 36$/.test(document.getElementById("bkPos").textContent) && getComputedStyle(document.querySelector("#spread .page")).display !== "none"));
+    await c.close(); }
+  // axe on the new surfaces: the handbook, the X-ray after ranking, the filtered board (both themes)
+  for (const mode of ["dark", "light"]) {
+    const c = await browser.newContext({ viewport: { width: 1280, height: 860 }, bypassCSP: true, reducedMotion: "reduce", extraHTTPHeaders: { "x-real-ip": "10.77.1." + (mode === "dark" ? 1 : 2) } }); await c.addInitScript(m => { try { localStorage.setItem("g-mode", m); } catch (e) {} }, mode);
+    const p = await c.newPage(); await p.goto(B + "/#kb"); await wait(500); await p.click('.kbmode button[data-m="book"]'); await wait(300);
+    let v = await axeSerious(p); C.ok(`P2 axe: no serious issues in the handbook (${mode})`, v.length === 0, v.join(", "));
+    await p.click('#viewseg button[data-view="tested"]'); await wait(300); await p.click('.cfbar button[data-v="medium"]'); await wait(100); await p.click(".tested .find:not([hidden]) summary"); await wait(100);
+    v = await axeSerious(p); C.ok(`P2 axe: no serious issues on the filtered case board (${mode})`, v.length === 0, v.join(", "));
+    await c.close(); }
   await browser.close();
 } else {
   console.log("(Chromium unavailable: running the jsdom subset; layout and CSP checks skipped)");
@@ -174,7 +278,7 @@ if (browser) {
   const html = (await import("node:fs")).readFileSync(path.join(ROOT, "backend/public/index.html"), "utf8");
   const dom = new JSDOM(html, { url: "https://nimbus-ai-demos.vercel.app/", runScripts: "dangerously", pretendToBeVisual: true, beforeParse(w) { w.TextDecoder = TextDecoder; w.TextEncoder = TextEncoder; w.__replies = []; w.cowork = { askClaude: async () => w.__replies.shift() ?? "Default stub answer [S1]." }; w.fetch = async () => { throw new Error("no network in jsdom"); }; } });
   await wait(100); const d = dom.window.document;
-  C.ok(`tested page has all ${NFIND} findings`, d.querySelectorAll("#testedview .find").length === NFIND);
+  C.ok(`tested page has all ${NFIND} findings`, (d.getElementById("testedTpl") ? d.getElementById("testedTpl").content : d).querySelectorAll(".find").length === NFIND);
   C.ok("credentials card present", /owner@acme-co\.example/.test(d.body.textContent));
   C.ok("version stamp present", !!d.getElementById("version"));
 }

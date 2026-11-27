@@ -2,7 +2,7 @@
 // static root, as on Vercel with outputDirectory "public") and mounts the REAL api handlers behind a
 // Vercel-style shim with the upstream provider mocked (deterministic, meaning-correlated embeddings).
 // Also launches headless Chromium when Playwright is available.
-import http from "node:http"; import fs from "node:fs"; import path from "node:path";
+import http from "node:http"; import fs from "node:fs"; import path from "node:path"; import zlib from "node:zlib";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -45,7 +45,14 @@ export async function startHarness({ port = 8811, env = {} } = {}) {
   const { default: transcribe } = await import(pathToFileURL(path.join(BACKEND, "api/transcribe.js")).href);
   const { default: health } = await import(pathToFileURL(path.join(BACKEND, "api/health.js")).href);
   const { default: cspReport } = await import(pathToFileURL(path.join(BACKEND, "api/csp-report.js")).href);
-  const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".json": "application/json", ".xml": "application/xml" };
+  const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".json": "application/json", ".xml": "application/xml", ".woff2": "font/woff2" };
+  // v3.3: text is served compressed when the browser asks, as the platform does, so Lighthouse sees realistic bytes
+  const ZCACHE = new Map(); const TEXTY = /^(text\/|application\/(json|xml)|image\/svg)/;
+  const sendStatic = (req, res, f, type) => { const buf = fs.readFileSync(f); const ae = String(req.headers["accept-encoding"] || "");
+    res.setHeader("Content-Type", type); if (!TEXTY.test(type) || !/\b(br|gzip)\b/.test(ae)) return res.end(buf);
+    const enc = /\bbr\b/.test(ae) ? "br" : "gzip", key = f + ":" + enc + ":" + fs.statSync(f).mtimeMs;
+    if (!ZCACHE.has(key)) ZCACHE.set(key, enc === "br" ? zlib.brotliCompressSync(buf, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }) : zlib.gzipSync(buf, { level: 9 }));
+    res.setHeader("Content-Encoding", enc); res.setHeader("Vary", "Accept-Encoding"); return res.end(ZCACHE.get(key)); };
   const vcfg = JSON.parse(fs.readFileSync(path.join(BACKEND, "vercel.json"), "utf8"));
   const headers = vcfg.headers?.[0]?.headers || []; const apiHeaders = (vcfg.headers || []).find(h => h.source === "/api/(.*)")?.headers || [];
   const STATIC_ROOT = path.join(BACKEND, vcfg.outputDirectory || ".");
@@ -62,9 +69,9 @@ export async function startHarness({ port = 8811, env = {} } = {}) {
     }
     if (u.pathname.startsWith("/_vercel/insights/")) { res.setHeader("Content-Type", "text/javascript"); return res.end("/* analytics stub for local gates */"); }
     const p = u.pathname === "/" ? "/index.html" : decodeURIComponent(u.pathname); const f = path.join(STATIC_ROOT, p);
-    if (f.startsWith(STATIC_ROOT + path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) { res.setHeader("Content-Type", MIME[path.extname(f)] || "application/octet-stream"); return res.end(fs.readFileSync(f)); }
+    if (f.startsWith(STATIC_ROOT + path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) return sendStatic(req, res, f, MIME[path.extname(f)] || "application/octet-stream");
     const nf = path.join(STATIC_ROOT, "404.html"); res.statusCode = 404;
-    if (fs.existsSync(nf)) { res.setHeader("Content-Type", MIME[".html"]); return res.end(fs.readFileSync(nf)); }
+    if (fs.existsSync(nf)) return sendStatic(req, res, nf, MIME[".html"]);
     res.end("not found");
   });
   await new Promise(r => server.listen(port, r));
