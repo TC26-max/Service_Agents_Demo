@@ -1,0 +1,35 @@
+{
+ "results": [
+  {
+   "vulns": [
+    {
+     "id": "GHSA-evil-0001"
+    }
+   ]
+  },
+  {
+   "vulns": [
+    {
+     "id": "GHSA-mini-0002"
+    }
+   ]
+  },
+  {
+   "vulns": [
+    {
+     "id": "GHSA-left-0003"
+    }
+   ]
+  },
+  {
+   "vulns": [
+    {
+     "id": "GHSA-old0-0004"
+    }
+   ]
+  },
+  {},
+  {},
+  {}
+ ]
+}

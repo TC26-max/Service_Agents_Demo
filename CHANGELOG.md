@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.4.0 (2026-11-27)
+
+Phase 3 of AUDIT-2026-11-26.md: a public Red Team Arena, a security page, and supply-chain hygiene.
+
+- Red Team Arena (Arena tab, `POST /api/arena`): five levels, each tied to an OWASP Top 10 for LLM Applications 2026 risk and to MITRE ATLAS: direct injection (LLM01), a poisoned passage (LLM01, indirect), hidden context with a canary that is new for every attempt (LLM08), running up the bill (LLM06), and rendering a link, image or HTML (LLM10). Code judges every attempt twice, on the model's raw reply and on what the gates let through; the judge is at least as strict as the gates (it also reads spaced-out, reversed, Base64, hex and NATO-alphabet spellings and spelled-out addresses), so a win is a real gap. Counts-only scoreboard, its own allowance (12 per 10 minutes, 40 per day per visitor), a cheaper model by default (`ARENA_MODEL`), keyword retrieval only, and a kill switch (`ARENA_ENABLED=0`).
+- Security page (`/security.html`, no scripts): threat model, the deploy's own response headers, all ten OWASP 2026 risks with how each is handled and where it is tested, nine MITRE ATLAS techniques, all 18 CIS Controls v8.1, the dependency watch, and disclosure. Linked from the page footer and the arena.
+- Supply chain: a daily dependency watch (`tools/depwatch.mjs`, `.github/workflows/depwatch.yml`) checks every npm package and workflow action against OSV, CVE records (the CNA's score first, then CISA's, the NVD only as a last resort and credited), CISA's Known Exploited Vulnerabilities catalog and FIRST EPSS; workflow actions are pinned to commit hashes; every workflow runs read-only; Dependabot keeps actions and development packages current.
+- Deception and reputation: scanner paths (/wp-login.php, /.env, /xmlrpc.php, /wp-admin, /phpmyadmin) land in a honeypot that answers like any missing page and logs the path family only; an optional Project Honey Pot http:BL lookup (`HTTPBL_KEY`) gives listed, recent abusers a tighter allowance on chat and the arena, never a block.
+- Five view tabs fit a 360 px phone ("Knowledge", "X-ray" on narrow screens).
+- Gates: gate-deps (the watch against recorded fixtures), 25 new endpoint checks, 13 new UI checks, 11 new static checks; the test harness applies the deploy's rewrites and mounts the new functions.
+
 ## 3.3.0 (2026-11-27)
 
 Phase 2 of AUDIT-2026-11-26.md: the visual upgrade, spent where retrieval happens, with Gate C kept (phone Lighthouse 95 or more, first load at most 100 KB compressed). Every animation is listed in the new `MOTION.md`.

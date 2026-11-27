@@ -245,11 +245,12 @@
     .composer{padding:8px 8px max(8px,env(safe-area-inset-bottom))}
     .privacy{padding:0 10px 8px;font-size:10.8px}
     .privacy .pl{display:none}.privacy .ps{display:inline}
-    footer a,.viewp a{display:inline-block;min-height:44px;line-height:44px}
+    footer a,.viewp a{display:inline-block;min-height:44px;min-width:44px;line-height:44px;text-align:center} /* v3.4: short labels ("Security") stay 44 px wide whatever the system font */
     .drawer .dh .x{width:44px;height:44px}
     .chathead .sp{flex-basis:100%;height:0}
   }
   @media(max-width:430px){ .seg .ei{display:none} .seg button{padding:6px 2px} }
+  @media(max-width:520px){ .seg .lg{display:none} } /* v3.4: five tabs fit a phone: "Knowledge", "X-ray" */
   .xwarn{font-size:12px;background:var(--warnbg);border:1px solid var(--warnline);color:var(--warn);border-radius:10px;padding:9px 11px;margin-bottom:10px;line-height:1.45}
   /* ---- cover / intro ---- */
   .cover{position:fixed;inset:0;z-index:50;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:34px 20px;
@@ -597,6 +598,42 @@
   @keyframes rStamp{from{transform:scale(1.7);opacity:0}}
   @media(max-width:640px){.cfbar button,.rplay,.tested .find summary{min-height:44px}.tested .find summary{display:flex;align-items:center}}
   html[data-motion="reduce"] .rplay{display:none}
+  /* ================= v3.4 (Phase 3): the Red Team Arena ================= */
+  .alevels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:10px 0 12px}
+  .alevels button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:8px 10px;font:inherit;font-size:12px;text-align:left;cursor:pointer;min-height:58px;display:grid;align-content:start;gap:2px}
+  .alevels button b{font-family:var(--display);font-size:13.5px;font-weight:700;font-stretch:90%}
+  .alevels button span{color:var(--muted);font-size:11px;font-family:var(--mono)}
+  .alevels button[aria-pressed="true"]{border-color:var(--accent-ink);box-shadow:0 0 0 1.5px var(--accent-ink);background:var(--soft)}
+  @media(max-width:860px){.alevels{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:520px){.alevels{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .alevel{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px 14px}
+  .alevel h3{margin:0 0 3px;font-family:var(--display);font-size:18px;font-weight:700;font-stretch:90%}
+  .alevel .ameta{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .alevel p{margin:8px 0;font-size:13px;line-height:1.5}
+  .agates{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 4px}
+  .agates span{font-size:11.3px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--muted)}
+  .alevel label{display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px}
+  .alevel textarea{width:100%;min-height:86px;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:inherit;font-size:13.5px;line-height:1.45;background:var(--bg);color:var(--ink);resize:vertical}
+  .arow{display:flex;align-items:center;gap:10px;margin-top:9px}
+  .acount{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+  .acount.over{color:var(--warn);font-weight:700}
+  .arow button{margin-left:auto;background:var(--accent);color:#fff;border:none;border-radius:11px;padding:0 18px;min-height:40px;font:inherit;font-weight:700;cursor:pointer}
+  .arow button:disabled{opacity:.5;cursor:default}
+  #aresult{margin-top:12px}
+  .aout{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px 14px}
+  .aout.won{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn)}
+  .averdict{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:9px}
+  .averdict .rv{animation:rStamp .35s cubic-bezier(.3,1.6,.5,1) both}
+  .averdict .chipv{font-size:11.5px;border-radius:999px;padding:2px 9px;border:1px solid var(--line);color:var(--ink)}
+  .areply{white-space:pre-wrap;background:var(--bot);border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
+  .anote{font-size:12.5px;color:var(--muted);margin:8px 0 0;line-height:1.45}
+  .ascore{margin-top:16px}
+  .ascore h3{font-family:var(--display);font-size:16px;margin:0 0 6px}
+  .ascore table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .ascore th,.ascore td{text-align:left;padding:7px 9px;border-top:1px solid var(--line)}
+  .ascore thead th{border-top:0;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+  .ascore td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  @media(max-width:640px){.arow button{min-height:44px}.ascore th,.ascore td{padding:6px}}
   @media(max-width:640px){.openbook{min-height:44px}}
 </style>
 </head>
@@ -630,6 +667,7 @@
   <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13.5 6.5L19 12l-5.5 5.5"/></symbol>
   <symbol id="i-left" viewBox="0 0 24 24"><path d="M19 12H5M10.5 6.5L5 12l5.5 5.5"/></symbol>
   <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M7 3.5h10M7 20.5h10M8 3.5c0 4 8 5 8 8.5s-8 4.5-8 8.5M16 3.5c0 4-8 5-8 8.5s8 4.5 8 8.5"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></symbol>
   <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2.5c.7 5.3 2.6 7.6 9.5 9.5-6.9 1.9-8.8 4.2-9.5 9.5-.7-5.3-2.6-7.6-9.5-9.5 6.9-1.9 8.8-4.2 9.5-9.5z"/></symbol>
 </defs></svg>
 
@@ -693,9 +731,10 @@
     <div class="sp"></div>
     <div class="seg" id="viewseg">
       <button data-view="chat" class="on" aria-pressed="true"><span class="ei" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg> </span>Chat</button>
-      <button data-view="kb" aria-pressed="false"><span class="ei" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-book"/></svg> </span>Knowledge Base</button>
-      <button data-view="xray" aria-pressed="false"><span class="ei" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-xray"/></svg> </span>Retrieval X-ray</button>
+      <button data-view="kb" aria-pressed="false"><span class="ei" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-book"/></svg> </span>Knowledge<span class="lg"> Base</span></button>
+      <button data-view="xray" aria-pressed="false"><span class="ei" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-xray"/></svg> </span><span class="lg">Retrieval </span>X-ray</button>
       <button data-view="tested" aria-pressed="false"><span class="ei" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-flask"/></svg> </span>Tested</button>
+      <button data-view="arena" aria-pressed="false"><span class="ei" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-target"/></svg> </span>Arena</button>
     </div>
     <button class="iconbtn" id="motionBtn" type="button" aria-pressed="false" aria-label="Pause motion" title="Pause all animation"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
     <button class="iconbtn" id="modeBtn" title="Switch to light mode" aria-label="Toggle dark or light mode"><svg class="ico" aria-hidden="true"><use href="#i-sun"/></svg></button>
@@ -738,6 +777,7 @@
       <div class="kbview" id="kbview"></div>
       <div class="kbview" id="xrayview"></div>
       <div class="kbview tested" id="testedview"></div>
+      <div class="kbview arena" id="arenaview"></div>
       <template id="testedTpl">{{TESTED_HTML}}</template>
     </div>
   </section>
@@ -754,7 +794,7 @@
   </div>
   </main>
   <footer><b>Privately built for demonstration &amp; portfolio purposes only.</b> Nimbus is a fictional product; all data is illustrative. Please don't enter real personal or payment information.
-    <br/><a href="https://github.com/TC26-max/Service_Agents_Demo" target="_blank" rel="noopener">View source on GitHub ↗</a> · <a href="#tested" id="testedLink">How it was tested, and what broke</a> · Sister project: <a href="{{SISTER_URL}}" target="_blank" rel="noopener">Harlan &amp; West IT Service Desk ↗</a>
+    <br/><a href="https://github.com/TC26-max/Service_Agents_Demo" target="_blank" rel="noopener">View source on GitHub ↗</a> · <a href="#tested" id="testedLink">How it was tested, and what broke</a> · <a href="/security.html">Security</a> · Sister project: <a href="{{SISTER_URL}}" target="_blank" rel="noopener">Harlan &amp; West IT Service Desk ↗</a>
     <br/><span id="version" data-version="{{VERSION}}">v{{VERSION}} · built {{BUILD_DATE}}</span></footer>
 </div>
 
@@ -887,13 +927,14 @@ function switchBot(id){ const card=document.querySelector(".chatcard");
 let KB_DIRTY=true;
 function mountTested(){ const tv=$("testedview"), tpl=$("testedTpl"); if(!tv||tv.childElementCount||!tpl) return; tv.appendChild(tpl.content.cloneNode(true)); initTested(); }
 function setView(v){ view=v; if(v==="tested") mountTested(); if(v==="kb"&&KB_DIRTY) renderKB(); $("viewseg").querySelectorAll("button").forEach(x=>{ const on=x.dataset.view===v; x.classList.toggle("on",on); x.setAttribute("aria-pressed",on?"true":"false"); });
-  const kb=v==="kb", xr=v==="xray", ts=v==="tested", off=kb||xr||ts;
+  const kb=v==="kb", xr=v==="xray", ts=v==="tested", ar=v==="arena", off=kb||xr||ts||ar;
+  $("arenaview").classList.toggle("show",ar);
   $("kbview").classList.toggle("show",kb);
   $("xrayview").classList.toggle("show",xr);
   $("testedview").classList.toggle("show",ts);
   chat.style.display=off?"none":"flex"; $("chips").style.display=off?"none":"flex"; $("composer").style.display=off?"none":"flex"; $("privacy").style.display=off?"none":"block";
   try{ history.replaceState(null,"",v==="chat"?location.pathname:"#"+v); }catch(e){}
-  if(xr) renderXray(); fitChat(); }
+  if(xr) renderXray(); if(ar) renderArena(); fitChat(); }
 function fitChat(){ const cc=document.querySelector(".chatcard"); if(!cc) return;
   if(view!=="chat" || !document.body.classList.contains("entered") || !(window.matchMedia && window.matchMedia("(max-width:640px)").matches)){ cc.style.height=""; return; }
   const top=cc.getBoundingClientRect().top+window.scrollY;
@@ -1303,6 +1344,50 @@ function drawMap(items,map){ const box=$("mapBox"); if(!box) return; box._pts=nu
     <div class="legend"><span><i class="k dot"></i>passage</span><span><i class="k dot top"></i>top 3 (S1 to S3)</span><span><i class="k q"></i>your question</span></div>
     <p class="mapnote">A 2D projection (PCA) of the passage embeddings: two components keep ${Math.round((+map.kept||0)*100)}% of the spread, so closeness here is a hint. The ranking uses the full vectors.</p>`; }
 
+/* ---------- Red Team Arena (v3.4, audit 2026-11-26, Phase 3) ---------- */
+/* Attack a sandboxed copy of the support bot. The server judges every attempt twice (raw reply, gated reply)
+   and keeps counts only; replies are printed as text, never as HTML, which is itself level 5's last gate. */
+let ARENA=null, ALEVEL=1, arenaBuilt=false;
+async function renderArena(){ const root=$("arenaview"); if(arenaBuilt) return; arenaBuilt=true;
+  root.innerHTML=`<div class="xhead"><b>Red Team Arena:</b> attack a sandboxed copy of the support assistant. Five levels, each tied to a risk in the OWASP Top 10 for LLM Applications 2026. Code judges every attempt twice: on the model's raw reply, and on what the gates let through. A win means a gate missed something, and that is worth reporting. Nothing you type is stored; the scoreboard keeps counts only. <a href="/security.html#arena">How it is scored</a></div><div id="abody"><div class="xhead">Loading the arena…</div></div>`;
+  if(typeof BACKEND==="undefined"||!BACKEND||inCowork()){ $("abody").innerHTML='<div class="xhead">The arena needs the deployed backend, and this preview has none.</div>'; return; }
+  try{ const r=await fetch(BACKEND.replace(/\/$/,"")+"/api/arena"); ARENA=await r.json(); if(!ARENA||!Array.isArray(ARENA.levels)) throw new Error("bad"); }
+  catch(e){ arenaBuilt=false; $("abody").innerHTML='<div class="xhead">The arena could not load just now. Open the tab again in a moment.</div>'; return; }
+  drawArena(); }
+function drawArena(focusLevel){ const L=ARENA.levels.find(l=>l.id===ALEVEL)||ARENA.levels[0], lim=ARENA.limits||{input:1500,edit:240};
+  $("abody").innerHTML=`<div class="alevels" role="group" aria-label="Choose a level">${ARENA.levels.map(l=>`<button type="button" data-l="${l.id}" aria-pressed="${l.id===ALEVEL}"><b>${l.id}. ${esc(l.title)}</b><span>${esc(l.owasp.split(" ")[0])}</span></button>`).join("")}</div>
+    <section class="alevel" aria-labelledby="alevelH"><h3 id="alevelH">Level ${L.id}: ${esc(L.title)}</h3><div class="ameta">${esc(L.owasp)} · MITRE ATLAS ${L.atlas.map(esc).join(", ")}</div>
+      <p><b>Goal.</b> ${esc(L.goal)}</p><p><b>You win if:</b> ${esc(L.win)}</p>
+      <div class="agates" role="list" aria-label="Gates on this level">${L.gates.map(g=>`<span role="listitem">${esc(g)}</span>`).join("")}</div>
+      ${L.id===2?`<label for="aedit">The refund passage, as you want it (at most ${lim.edit} characters)</label><textarea id="aedit">${esc(ARENA.refundPassage||"")}</textarea>`:""}
+      <label for="aq">Your attack</label><textarea id="aq" placeholder="${L.id===2?"Then ask about refunds…":"Type your attack…"}"></textarea>
+      <div class="arow"><span class="acount" id="acount">0 / ${Number(lim.input).toLocaleString("en-US")}</span><button type="button" id="ago"${ARENA.enabled?"":" disabled"}>Attack</button></div>
+      ${ARENA.enabled?"":'<p class="anote">The arena is switched off right now; the rest of the demo still works.</p>'}</section>
+    <div id="aresult" role="status" aria-live="polite"></div>
+    <section class="ascore" aria-labelledby="ascoreH"><h3 id="ascoreH">Scoreboard</h3><div id="ascoreT"></div></section>`;
+  $("abody").querySelectorAll(".alevels button").forEach(b=>b.onclick=()=>{ ALEVEL=+b.dataset.l; drawArena(ALEVEL); });
+  if(focusLevel){ const fb=$("abody").querySelector(`.alevels button[data-l="${focusLevel}"]`); if(fb) fb.focus(); }
+  const q=$("aq"), cnt=$("acount"); q.oninput=()=>{ cnt.textContent=q.value.length.toLocaleString("en-US")+" / "+Number(lim.input).toLocaleString("en-US"); cnt.classList.toggle("over",q.value.length>lim.input); };
+  q.onkeydown=e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); arenaAttack(); } };
+  $("ago").onclick=arenaAttack; drawScore(ARENA.score); }
+async function arenaAttack(){ const q=$("aq"), btn=$("ago"); if(!q||!btn||btn.disabled) return; if(!q.value.trim()){ q.focus(); return; }
+  btn.disabled=true; $("aresult").innerHTML='<div class="xhead">Attacking…</div>';
+  try{ const r=await fetch(BACKEND.replace(/\/$/,"")+"/api/arena",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({level:ALEVEL,attack:q.value,edit:ALEVEL===2&&$("aedit")?$("aedit").value:undefined})});
+    const j=await r.json().catch(()=>({}));
+    if(j.score){ ARENA.score=j.score; drawScore(j.score); }
+    if(j.verdict) showVerdict(j); else $("aresult").innerHTML=`<div class="xhead">${esc(j.message||j.error||("HTTP "+r.status))}</div>`; }
+  catch(e){ $("aresult").innerHTML='<div class="xhead">The attack did not go through. Try again in a moment.</div>'; }
+  finally{ btn.disabled=!ARENA.enabled; } }
+function showVerdict(j){ const v=j.verdict, box=document.createElement("div"); box.className="aout "+(v.won?"won":v.fooled?"fooled":"held");
+  box.innerHTML=`<div class="averdict"><span class="rv ${v.won?"broke":"held"}">${v.won?"You win":"Defended"}</span><span class="chipv">Model: ${v.stage==="input"?"never reached":v.fooled?"fooled":"held"}</span>${v.gates&&v.gates.length?`<span class="chipv">Gates: ${v.gates.map(esc).join(", ")}</span>`:""}</div>`;
+  if(j.reply){ const rp=document.createElement("div"); rp.className="areply"; rp.textContent=j.reply; box.appendChild(rp); }
+  const n=document.createElement("p"); n.className="anote"; n.textContent=v.note||""; box.appendChild(n);
+  if(v.won){ const a=document.createElement("p"); a.className="anote"; a.innerHTML='<a href="https://github.com/TC26-max/Service_Agents_Demo/security/advisories/new" target="_blank" rel="noopener">Report it privately on GitHub</a>, with what you typed and when.'; box.appendChild(a); }
+  $("aresult").replaceChildren(box); }
+function drawScore(sc){ const t=$("ascoreT"); if(!t||!sc||!sc.levels) return;
+  t.innerHTML=`<table><thead><tr><th scope="col">Level</th><th scope="col">Attempts</th><th scope="col">Model fooled</th><th scope="col">Caught by a gate</th><th scope="col">Wins</th></tr></thead><tbody>${ARENA.levels.map(l=>{ const x=sc.levels[l.id]||{}; return `<tr><th scope="row">${l.id}. ${esc(l.title)}</th><td>${x.attempts||0}</td><td>${x.fooled||0}</td><td>${x.caught||0}</td><td>${x.wins||0}</td></tr>`; }).join("")}</tbody></table>
+    <p class="anote">Counts since this server instance started at ${esc(new Date(sc.since).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}))}. Instances restart, so the numbers reset. Nothing anyone types here is kept.</p>`; }
+
 let toastT; function toast(msg){ let t=$("toast"); if(!t){ t=document.createElement("div"); t.id="toast";
   t.style.cssText="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:40;box-shadow:0 8px 24px rgba(0,0,0,.25)"; document.body.appendChild(t);}
   t.textContent=msg; t.style.opacity="1"; clearTimeout(toastT); toastT=setTimeout(()=>t.style.opacity="0",2600); }
@@ -1423,7 +1508,7 @@ input.addEventListener("input",()=>{ input.style.height="auto"; input.style.heig
 selectBot("support");
 /* v3.3: a fresh load of a deep link (#kb, #xray, #tested) keeps its hash for the intro script below; before,
    the boot call to setView("chat") rewrote the address first, so a shared link opened the intro instead */
-if(!["kb","xray","tested"].includes(location.hash.replace("#",""))) setView("chat");
+if(!["kb","xray","tested","arena"].includes(location.hash.replace("#",""))) setView("chat");
 if(useBackendMode()){ document.body.classList.add("backend-mode"); loadHealth(); setInterval(loadHealth, 10*60*1000); } else setStatus();
 
 /* ---- dark/light mode toggle (v2.2; dark set pre-paint in <head>, choice remembered) ---- */
@@ -1641,7 +1726,7 @@ async function blobToWavBase64(blob){
       const eb2=document.getElementById("enterBtn"); if(eb2) eb2.focus(); };
     brand.onclick=back; brand.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); back(); } }; }
   // v3.0 deep links: #kb, #xray, #tested, #chat skip the cover
-  const views=["kb","xray","tested","chat"];
+  const views=["kb","xray","tested","arena","chat"];
   const goHash=()=>{ const h=location.hash.replace("#",""); if(views.includes(h)){ if(!document.body.classList.contains("entered")) enter(null); setView(h); } };
   goHash(); window.addEventListener("hashchange",goHash);
   const tl=document.getElementById("testedLink"); if(tl) tl.onclick=(e)=>{ e.preventDefault(); if(!document.body.classList.contains("entered")) enter(null); setView("tested"); window.scrollTo(0,0); };

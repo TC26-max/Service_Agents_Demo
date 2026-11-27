@@ -1,6 +1,6 @@
 {
   "label": "in-sample-adjacent (questions written after reading the KB; see eval/gold.json protocol note)",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "keyword": {
     "n": 36,
     "recallAt1": 0.61,

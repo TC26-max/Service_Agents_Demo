@@ -29,7 +29,8 @@ export async function startHarness({ port = 8811, env = {} } = {}) {
       const lastUser = [...body.messages].reverse().find(m => m.role === "user")?.content || "";
       const m = /\[\[reply:(.*?)\]\]/s.exec(lastUser); const sys = body.messages[0].content;
       const ticket = (sys.match(/NIM-\d{5}/) || ["NIM-00000"])[0];
-      const reply = mode.reply || (m ? m[1] : "Paid plans are refundable within 14 days of a charge [S1].").replace("{TICKET}", ticket);
+      const canary = (sys.match(/ARENA-[A-Z0-9]{4}-[A-Z0-9]{4}/) || ["ARENA-0000-0000"])[0]; // v3.4: the arena's per-attempt canary
+      const reply = (mode.reply || (m ? m[1] : "Paid plans are refundable within 14 days of a charge [S1].")).replace("{TICKET}", ticket).split("{CANARY}").join(canary).split("{CANARY_B64}").join(Buffer.from(canary).toString("base64")).split("{CANARY_REV}").join([...canary].reverse().join(""));
       if (body.stream) {
         if (mode.streamFail) return { ok: false, status: 500, text: async () => "stream unavailable", body: null };
         const enc = new TextEncoder(); const parts = reply.match(/.{1,12}/gs) || [reply];
@@ -45,6 +46,9 @@ export async function startHarness({ port = 8811, env = {} } = {}) {
   const { default: transcribe } = await import(pathToFileURL(path.join(BACKEND, "api/transcribe.js")).href);
   const { default: health } = await import(pathToFileURL(path.join(BACKEND, "api/health.js")).href);
   const { default: cspReport } = await import(pathToFileURL(path.join(BACKEND, "api/csp-report.js")).href);
+  const { default: arena } = await import(pathToFileURL(path.join(BACKEND, "api/arena.js")).href);
+  const { default: trap } = await import(pathToFileURL(path.join(BACKEND, "api/trap.js")).href);
+  const ROUTES = { "/api/chat": chat, "/api/transcribe": transcribe, "/api/health": health, "/api/csp-report": cspReport, "/api/arena": arena, "/api/trap": trap };
   const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".json": "application/json", ".xml": "application/xml", ".woff2": "font/woff2" };
   // v3.3: text is served compressed when the browser asks, as the platform does, so Lighthouse sees realistic bytes
   const ZCACHE = new Map(); const TEXTY = /^(text\/|application\/(json|xml)|image\/svg)/;
@@ -58,12 +62,15 @@ export async function startHarness({ port = 8811, env = {} } = {}) {
   const STATIC_ROOT = path.join(BACKEND, vcfg.outputDirectory || ".");
   const server = http.createServer(async (req, res) => {
     for (const h of headers) res.setHeader(h.key, h.value); // serve under the exact deploy headers (CSP included)
-    const u = new URL(req.url, "http://x");
+    let u = new URL(req.url, "http://x");
+    // v3.4: the deploy's rewrites apply here too (the honeypot paths land in /api/trap)
+    const rw = (vcfg.rewrites || []).find(r => new RegExp("^" + r.source.replace(/[.]/g, "\\.").replace(/\/:\w+\*/g, "(?:/.*)?") + "$").test(u.pathname));
+    if (rw) { u = new URL(rw.destination, "http://x"); req.url = u.pathname + u.search; }
     res.status = c => { res.statusCode = c; return res; }; res.json = o => { res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(o)); };
     if (u.pathname.startsWith("/api/")) {
       for (const h of apiHeaders) res.setHeader(h.key, h.value);
       let raw = ""; for await (const ch of req) raw += ch; try { req.body = raw ? JSON.parse(raw) : {}; } catch { req.body = raw; }
-      try { if (u.pathname === "/api/chat") await chat(req, res); else if (u.pathname === "/api/transcribe") await transcribe(req, res); else if (u.pathname === "/api/health") await health(req, res); else if (u.pathname === "/api/csp-report") await cspReport(req, res); else { res.statusCode = 404; res.end(); } }
+      try { const fn = ROUTES[u.pathname]; if (fn) await fn(req, res); else { res.statusCode = 404; res.end(); } }
       catch (e) { res.statusCode = 500; res.end("handler threw: " + e.message); }
       return;
     }

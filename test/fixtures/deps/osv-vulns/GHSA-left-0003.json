@@ -1,0 +1,8 @@
+{
+ "id": "GHSA-left-0003",
+ "aliases": [],
+ "summary": "A moderate issue with no CVE (fixture)",
+ "database_specific": {
+  "severity": "MODERATE"
+ }
+}

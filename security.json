@@ -1,0 +1,86 @@
+{
+  "_about": "Source of the security page (backend/public/security.html), rendered by build.mjs. The headers table on that page is generated from the same configuration the build writes to vercel.json, so it cannot drift. Framework names and IDs were checked in November 2026 against the OWASP Top 10 for LLM Applications 2026, MITRE ATLAS and D3FEND technique pages, and the CIS Critical Security Controls v8.1 list.",
+  "updated": "2026-11-27",
+  "summary": "Grounded is a public demo with no accounts, no database and no stored conversations, so the things worth protecting are the model provider's bill, the honesty of the answers, visitors' privacy and the site itself. This page sets out what can go wrong, what stops it, and where each control is tested.",
+  "assets": [
+    { "name": "The provider key and its bill", "risk": "Scripted traffic runs up the model provider's charges or exhausts the free quota for everyone.", "controls": "Per-visitor and daily limits on every endpoint (N-01, N-11), input and output caps (N-09), a separate arena budget and kill switch, a limited deep health check. A platform firewall rule is the owner's step." },
+    { "name": "Honest answers", "risk": "An answer invents a policy, asks for a card number or sends people to an address that is not Nimbus's.", "controls": "Answers come from cited passages or say the knowledge base has nothing; deterministic output rules (R-SECRET, R-CONTACT, R-CARD, R-IMAGE, R-STUDENT, R-PROMPT); signed history so earlier replies cannot be forged (N-08)." },
+    { "name": "Visitors' privacy", "risk": "Something a visitor types is kept, logged or leaked.", "controls": "No accounts and no storage of conversations or voice audio; logs keep counts and rule ids only; a privacy note says what goes to the model provider (N-03)." },
+    { "name": "The site itself", "risk": "Injected script, framing, or server files served as pages.", "controls": "A hash-pinned Content Security Policy, HSTS, same-origin opener and resource policies, X-Frame-Options; only the public folder is served (N-10)." },
+    { "name": "Hidden context", "risk": "The instructions behind the assistants are read back.", "controls": "Of little value by design: both prompts are published with the source. R-PROMPT declines recitation, and the arena guards a random canary." }
+  ],
+  "actors": [
+    "A curious visitor, the expected case.",
+    "A prompt injector, who tries to make an assistant break its rules or leak its context.",
+    "A cost abuser or bot, who sends many requests to run up the bill.",
+    "A scanner, who asks for well-known admin paths; those land in a honeypot that answers like any missing page.",
+    "A researcher, who reports what they find (see Disclosure)."
+  ],
+  "entryPoints": [
+    "POST /api/chat: chat answers and the Retrieval X-ray (mode retrieve).",
+    "POST /api/transcribe: voice, behind a short-lived signed token.",
+    "POST /api/arena: the Red Team Arena, a sandboxed copy of the support bot with its own budget.",
+    "GET /api/health: status; the deep check calls the model at most a few times a day.",
+    "POST /api/csp-report: browser reports of blocked content, reduced to directive and origin.",
+    "Static files under /, from the public folder only.",
+    "Knowledge-base edits, which live in the visitor's tab and travel with each request, capped at 240 characters."
+  ],
+  "boundary": "Everything the browser sends is untrusted, including the conversation history, edited passages and the requested mode. The functions hold no state between requests beyond counters. The model provider is a third party that receives the system prompt, the retrieved passages and the visitor's message. The model's reply is untrusted until the output rules pass it, and the page prints it as text, never as HTML.",
+  "owasp": [
+    { "id": "LLM01:2026", "name": "Prompt Injection", "status": "Defended in depth", "how": "Passages are fenced with a per-request code; text is NFKC-normalized and invisible characters are stripped (N-16); assistant turns carry a server signature (N-08); system-role messages from the browser are dropped (G-01); output rules catch what gets through.", "tested": "Arena levels 1 and 2; live probes 3, 5, 7, 10, 11; both probe scripts." },
+    { "id": "LLM02:2026", "name": "Sensitive Information Disclosure", "status": "Defended", "how": "Nothing personal is stored or retrievable; R-SECRET replaces any reply that asks for card numbers, passwords or codes; R-CARD removes card-shaped numbers.", "tested": "N-02 probe; endpoint gate." },
+    { "id": "LLM03:2026", "name": "Excessive Agency", "status": "Not applicable by design", "how": "The assistants have no tools and cannot act; tickets are labelled illustrative. The page flags replies that claim an action (G-05), and the arena's R-ACTION replaces refund claims.", "tested": "Arena level 1; UI gate (claim guard)." },
+    { "id": "LLM04:2026", "name": "Supply Chain", "status": "Watched", "how": "The deployed functions have no npm runtime dependencies; fonts and icons are self-hosted and no third-party script loads; workflow actions are pinned to commit hashes; a daily dependency watch checks every package against OSV, CVE records, CISA KEV and FIRST EPSS.", "tested": "Static gate (no third-party assets); dependency watch." },
+    { "id": "LLM05:2026", "name": "Data and Model Poisoning", "status": "Defended", "how": "The knowledge base changes only through git. Visitor edits are session-only, capped, labelled VISITOR-EDITED, fenced, and answered only after a full check (N-02, G-03). Nothing is trained or fine-tuned on visitor data.", "tested": "Arena level 2; N-02 probe." },
+    { "id": "LLM06:2026", "name": "Unbounded Consumption", "status": "Defended", "how": "Limits per visitor and per day on every endpoint, input and output caps, a capped deep health check, the arena's own budget and kill switch.", "tested": "Arena level 4; endpoint gate (limits, caps)." },
+    { "id": "LLM07:2026", "name": "Misinformation", "status": "Mitigated", "how": "Answers cite their passages or say the knowledge base has nothing; R-STUDENT corrects a known wrong answer (N-05); a retrieval gold set runs in CI; an optional faithfulness check exists behind a flag.", "tested": "Retrieval eval; N-05 probe; live rerun of N-05 pending." },
+    { "id": "LLM08:2026", "name": "Hidden Context Exposure", "status": "Defended", "how": "The prompts are public on purpose, so reading them back costs nothing; R-PROMPT declines recitation; the arena hides a fresh canary in every attempt and R-CANARY blocks it in any spelling.", "tested": "Arena level 3; live probe 9; N-04." },
+    { "id": "LLM09:2026", "name": "Vector and Embedding Weaknesses", "status": "Low exposure", "how": "One tenant and 36 public passages from one owner, so retrieval cannot cross users; edited passages are embedded for one request and never stored; the X-ray's map is a projection of the public corpus.", "tested": "Endpoint gate (map, edits)." },
+    { "id": "LLM10:2026", "name": "Improper Output Handling", "status": "Defended", "how": "The page prints model output as text, never HTML; R-IMAGE and the arena's R-MARKUP remove images, links and HTML on the server; the Content Security Policy blocks inline and third-party scripts and images from other origins.", "tested": "Arena level 5; live probe 8; UI gate." }
+  ],
+  "atlas": [
+    { "id": "AML.T0051.000", "name": "LLM Prompt Injection: Direct", "where": "Arena level 1; live probes 4 and 7" },
+    { "id": "AML.T0051.001", "name": "LLM Prompt Injection: Indirect", "where": "Arena level 2; live probes 10 and 11; N-02" },
+    { "id": "AML.T0070", "name": "RAG Poisoning", "where": "Arena level 2 (session-only by design)" },
+    { "id": "AML.T0068", "name": "LLM Prompt Obfuscation", "where": "Invisible-character stripping; live probe 5; N-16" },
+    { "id": "AML.T0054", "name": "LLM Jailbreak", "where": "Persona rules and output gates; live probes 3 and 7" },
+    { "id": "AML.T0056", "name": "Extract LLM System Prompt", "where": "Arena level 3; live probe 9; N-04" },
+    { "id": "AML.T0077", "name": "LLM Response Rendering", "where": "Arena level 5; live probe 8; R-IMAGE" },
+    { "id": "AML.T0034", "name": "Cost Harvesting", "where": "Arena level 4; limits and caps (N-01, N-09)" },
+    { "id": "AML.T0029", "name": "Denial of AI Service", "where": "Limits on every endpoint; a platform firewall rule (owner step)" }
+  ],
+  "cis": [
+    { "n": 1, "name": "Inventory and Control of Enterprise Assets", "status": "Partly", "how": "Serverless, so there are no machines to inventory. The assets (repository, Vercel project, model key, domain) are listed in DEPLOY-GUIDE.md." },
+    { "n": 2, "name": "Inventory and Control of Software Assets", "status": "Yes", "how": "package-lock.json pins every package; the functions have none at runtime; the dependency watch lists them all daily." },
+    { "n": 3, "name": "Data Protection", "status": "Yes", "how": "No personal data is collected or kept; logs hold counts only; the privacy note names what reaches the model provider." },
+    { "n": 4, "name": "Secure Configuration of Enterprise Assets and Software", "status": "Yes", "how": "Security headers and a hash-pinned CSP come from the build and are checked by the static gate; server files are never served." },
+    { "n": 5, "name": "Account Management", "status": "Owner step", "how": "The site has no accounts. Two-factor sign-in on the GitHub, Vercel and Google accounts is the owner's to keep." },
+    { "n": 6, "name": "Access Control Management", "status": "Partly", "how": "Tokens and apps are scoped to this repository, and every workflow runs with read-only repository permissions." },
+    { "n": 7, "name": "Continuous Vulnerability Management", "status": "Yes", "how": "A daily dependency watch (OSV advisories, CVE records with CNA scores first, CISA KEV, FIRST EPSS), two audits, a live red-team pass and the public arena." },
+    { "n": 8, "name": "Audit Log Management", "status": "Partly", "how": "Platform logs keep counts and rule ids only: guard rules, arena verdicts, limiter warnings, honeypot hits, CSP reports. Retention is the platform's." },
+    { "n": 9, "name": "Email and Web Browser Protections", "status": "Yes (web)", "how": "CSP with hashed scripts and no third-party scripts, HSTS with preload, X-Frame-Options DENY, same-origin opener and resource policies. There is no email." },
+    { "n": 10, "name": "Malware Defenses", "status": "Partly", "how": "The only upload is voice audio: WAV only, checked by its first bytes, size-capped and never stored." },
+    { "n": 11, "name": "Data Recovery", "status": "Yes", "how": "Everything lives in git, and any deploy can be rolled back on the platform." },
+    { "n": 12, "name": "Network Infrastructure Management", "status": "Platform", "how": "Run by Vercel. A firewall rate-limit rule for /api is the owner's step." },
+    { "n": 13, "name": "Network Monitoring and Defense", "status": "Partly", "how": "CSP violation reports, the daily model canary, fair-use limits, the optional Project Honey Pot signal and the honeypot paths." },
+    { "n": 14, "name": "Security Awareness and Skills Training", "status": "Not applicable", "how": "A one-person project; the Tested page and this page explain the defenses to visitors." },
+    { "n": 15, "name": "Service Provider Management", "status": "Yes", "how": "Two providers: Vercel (hosting and logs) and Google (the model, which receives the prompt, passages and message). Both are named in the privacy note." },
+    { "n": 16, "name": "Application Software Security", "status": "Yes", "how": "Every change runs four gates, a retrieval eval, two probe scripts, Lighthouse and accessibility budgets; every finding gets an ID and a gate." },
+    { "n": 17, "name": "Incident Response Management", "status": "Partly", "how": "SECURITY.md and security.txt for reports, kill switches (ARENA_ENABLED, the model variables), the daily canary and platform rollbacks." },
+    { "n": 18, "name": "Penetration Testing", "status": "Yes", "how": "Two audits (September and November 2026), a live red-team pass of 16 probes, and the arena, open to anyone." }
+  ],
+  "sources": [
+    { "name": "OWASP Top 10 for LLM Applications 2026", "url": "https://genai.owasp.org/" },
+    { "name": "MITRE ATLAS", "url": "https://atlas.mitre.org/" },
+    { "name": "CIS Critical Security Controls v8.1", "url": "https://www.cisecurity.org/controls/cis-controls-list" },
+    { "name": "CVE Program", "url": "https://www.cve.org/" },
+    { "name": "NIST National Vulnerability Database", "url": "https://nvd.nist.gov/" },
+    { "name": "NIST Security Content Automation Protocol (CVSS, CPE)", "url": "https://csrc.nist.gov/projects/security-content-automation-protocol/" },
+    { "name": "CISA Known Exploited Vulnerabilities catalog", "url": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog" },
+    { "name": "FIRST EPSS", "url": "https://www.first.org/epss/" },
+    { "name": "OSV vulnerability database", "url": "https://osv.dev/" },
+    { "name": "Project Honey Pot http:BL", "url": "https://www.projecthoneypot.org/httpbl_api.php" },
+    { "name": "OWASP WebGoat (training)", "url": "https://owasp.org/projects/webgoat" },
+    { "name": "Cyber Threat Alliance", "url": "https://www.cyberthreatalliance.org/" }
+  ]
+}

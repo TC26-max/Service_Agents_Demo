@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 import { buildKeywordIndex, keywordRank, overrideTerms, cosine, fuseHybrid } from "../lib/retrieval.mjs";
 import { clientIp, readJsonBody } from "../lib/security.mjs";
 import { makeLimiter } from "../lib/limits.mjs";
+import { reputation } from "../lib/httpbl.mjs";
 import { cleanText, signTurn, verifyTurn, newFence, fence, FENCE_RULE, makeOutputGuard } from "../lib/guard.mjs";
 import { PROVIDER, API_BASE, KEY, EMBED_MODEL, CHAT_MODELS, payloadFor } from "../lib/provider.mjs";
 import { pca2 } from "../lib/project.mjs";
@@ -63,6 +64,8 @@ const MAX_TOKENS = 400;
 
 // ---- fair-use limiter (per warm instance; keyed on the platform client IP; accepted calls only) ----
 const LIMIT = makeLimiter({ name: "chat", windowMs: 5 * 60 * 1000, perIp: 20, perIpDay: 120, perDay: 600 });
+// v3.4: addresses Project Honey Pot lists as recent abusers (only when HTTPBL_KEY is set) get a tighter allowance
+const TIGHT = makeLimiter({ name: "chat-tight", windowMs: 5 * 60 * 1000, perIp: 4, perIpDay: 12, perDay: 600 });
 // ---- request caps (audit N-09, OWASP LLM 2026 #6 Unbounded Consumption) ----
 const MAX_TURNS = 12, MAX_MSG_CHARS = 4000, MAX_TOTAL_CHARS = 12000;
 function capMessages(list, bot) {
@@ -194,7 +197,8 @@ export default async function handler(req, res) {
   const retrieveOnly = body.mode === "retrieve";
   if (!retrieveOnly && !messages.some(m => m.role === "user" && m.content.trim())) { res.status(400).json({ error: "empty_request", message: "Send at least one visitor message." }); return; }
   if (retrieveOnly && !String(body.q || "").trim()) { res.status(400).json({ error: "empty query" }); return; }
-  if (!LIMIT.check(clientIp(req)).ok) { res.status(429).json({ error: FAIR_USE_MSG }); return; }
+  const ip = clientIp(req), rep = await reputation(ip);
+  if (!LIMIT.check(ip).ok || (rep.suspicious && !TIGHT.check(ip).ok)) { if (rep.suspicious) console.log("[grounded] chat: http:BL tightened"); res.status(429).json({ error: FAIR_USE_MSG }); return; }
   try {
     if (body.mode === "retrieve") {
       const q = String(body.q || "").slice(0, 500).trim(); const t0 = performance.now();

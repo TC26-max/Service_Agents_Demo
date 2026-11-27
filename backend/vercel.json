@@ -15,15 +15,45 @@
     },
     "api/csp-report.js": {
       "maxDuration": 5
+    },
+    "api/arena.js": {
+      "includeFiles": "{kb.json,personas/*.json,version.json}",
+      "maxDuration": 30
+    },
+    "api/trap.js": {
+      "includeFiles": "public/404.html",
+      "maxDuration": 5
     }
   },
+  "rewrites": [
+    {
+      "source": "/wp-login.php",
+      "destination": "/api/trap?from=wp-login"
+    },
+    {
+      "source": "/wp-admin/:path*",
+      "destination": "/api/trap?from=wp-admin"
+    },
+    {
+      "source": "/xmlrpc.php",
+      "destination": "/api/trap?from=xmlrpc"
+    },
+    {
+      "source": "/.env",
+      "destination": "/api/trap?from=env"
+    },
+    {
+      "source": "/phpmyadmin/:path*",
+      "destination": "/api/trap?from=phpmyadmin"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-Bw8lTCdp3cbofU1JNOhsT1VDfrUGdHB2n8bmY6NppnA=' 'sha256-2F7NKJ0v1lt5Bo4z/S8hC3iHhwMJw3R9N12XwsaV1Dk=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report"
+          "value": "default-src 'self'; script-src 'self' 'sha256-Bw8lTCdp3cbofU1JNOhsT1VDfrUGdHB2n8bmY6NppnA=' 'sha256-nDEwVv4n7xvq0stfT9gDTPoT66j64CERTJa6XGCwgMY=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report"
         },
         {
           "key": "Strict-Transport-Security",
