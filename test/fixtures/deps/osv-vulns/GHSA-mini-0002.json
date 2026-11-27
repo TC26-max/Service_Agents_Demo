@@ -1,0 +1,10 @@
+{
+ "id": "GHSA-mini-0002",
+ "aliases": [
+  "CVE-2021-44906"
+ ],
+ "summary": "Prototype pollution (fixture)",
+ "database_specific": {
+  "severity": "CRITICAL"
+ }
+}

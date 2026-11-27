@@ -35,6 +35,7 @@ Phase 2 of the November audit (AUDIT-2026-11-26.md) gave the demo one visual ide
 | `qDrop`, `lnDraw` | Embedding map | Rank | 0.55 s drop, 0.45 s lines | Drawn at once | Ends by itself |
 | Page turn (script) | Handbook | Previous or Next, arrow keys | 560 ms, CSS 3D leaf; phones slide 130 ms plus 200 ms | Page swaps | Ends by itself |
 | `rType`, `rIn`, `rStamp` | Tested, replay cards | Replay button | 1.1 s, 0.35 s, 0.35 s | Button hidden | Ends by itself |
+| `rStamp` (again) | Red Team Arena verdict | Each attempt's result | 0.35 s | Shown at once | Ends by itself |
 | `pulseA` | Sidebar card | Entering the demo | 1.3 s, 3 times | Once, instantly | Ends by itself |
 | `pulseMic` | Microphone button | While recording | 1.1 s loop | Static | Recording stops |
 | Drawer, scrim, intro fade | Page | Open, close, enter | 0.25 s, 0.25 s, 0.45 s transitions | Instant | Ends by itself |

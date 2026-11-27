@@ -1,0 +1,10 @@
+{
+ "id": "GHSA-old0-0004",
+ "aliases": [
+  "CVE-2020-0004"
+ ],
+ "summary": "An issue scored only by the NVD (fixture)",
+ "database_specific": {
+  "severity": "MODERATE"
+ }
+}

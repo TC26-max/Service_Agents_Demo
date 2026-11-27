@@ -93,4 +93,27 @@ C.ok("font subsets total 30 to 60 KB", fontBytes >= 30 * 1024 && fontBytes <= 60
 C.ok("no third-party scripts, styles or fonts (everything self-hosted)", !/<(script|link)[^>]+(src|href)="https?:/i.test(built) && !/url\((["']?)https?:/i.test(built));
 const emoji = built.match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu) || [];
 C.ok("interface icons are SVG, not emoji (only the sales greeting waves)", emoji.length <= 1 && (emoji.length === 0 || /Hey! \u{1F44B}/u.test(built)), emoji.join(" "));
+
+// 11. v3.4 (Phase 3): the security page, the arena's mapping, the supply chain
+const secPath = path.join(ROOT, "backend", "public", "security.html"); const secPage = fs.existsSync(secPath) ? fs.readFileSync(secPath, "utf8") : "";
+const secData = JSON.parse(R("security.json"));
+// the OWASP Top 10 for LLM Applications 2026, in rank order (checked November 2026)
+const OWASP26 = ["Prompt Injection", "Sensitive Information Disclosure", "Excessive Agency", "Supply Chain", "Data and Model Poisoning", "Unbounded Consumption", "Misinformation", "Hidden Context Exposure", "Vector and Embedding Weaknesses", "Improper Output Handling"];
+C.ok("security page lists all ten OWASP 2026 risks under their 2026 numbers", secData.owasp.length === 10 && secData.owasp.every((o, i) => o.id === `LLM${String(i + 1).padStart(2, "0")}:2026` && o.name === OWASP26[i]) && OWASP26.every((n, i) => secPage.includes(`LLM${String(i + 1).padStart(2, "0")}:2026 ${n}`)));
+const CIS18 = ["Inventory and Control of Enterprise Assets", "Inventory and Control of Software Assets", "Data Protection", "Secure Configuration of Enterprise Assets and Software", "Account Management", "Access Control Management", "Continuous Vulnerability Management", "Audit Log Management", "Email and Web Browser Protections", "Malware Defenses", "Data Recovery", "Network Infrastructure Management", "Network Monitoring and Defense", "Security Awareness and Skills Training", "Service Provider Management", "Application Software Security", "Incident Response Management", "Penetration Testing"];
+C.ok("security page covers all 18 CIS Controls v8.1, by name and number", secData.cis.length === 18 && secData.cis.every((c, i) => c.n === i + 1 && c.name === CIS18[i]) && CIS18.every((n, i) => secPage.includes(`${i + 1}. ${n.replace(/&/g, "&amp;")}`)));
+C.ok("security page maps MITRE ATLAS techniques by ID", ["AML.T0051.000", "AML.T0051.001", "AML.T0056", "AML.T0077", "AML.T0034"].every(id => secPage.includes(id)) && secData.atlas.every(a => /^AML\.T\d{4}(\.\d{3})?$/.test(a.id)));
+const vjs = JSON.parse(R("backend/vercel.json"));
+C.ok("security page's header table is the deploy's own headers", vjs.headers[0].headers.every(h => secPage.includes(`<th scope="row">${h.key}</th>`) && secPage.includes(h.value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"))));
+C.ok("security page runs no script and credits the NVD", !/<script/i.test(secPage) && secPage.includes("not endorsed or certified by the NVD") && secPage.includes("/.well-known/security.txt") && secPage.includes("security/advisories/new"));
+const arenaSrc = R("backend/lib/arena.mjs");
+const levelOwasp = [...arenaSrc.matchAll(/id: (\d), slug: "\w+", title: "[^"]+", owasp: "(LLM\d\d:2026)/g)].map(m => [+m[1], m[2]]);
+C.ok("each arena level's OWASP risk names that level on the security page", levelOwasp.length === 5 && levelOwasp.every(([n, id]) => secData.owasp.some(o => o.id === id && new RegExp(`Arena levels? (?:\\d and )?(?:\\d, )*${n}\\b|Arena levels? ${n}\\b|Arena levels \\d and ${n}\\b`).test(o.tested))), JSON.stringify(levelOwasp));
+C.ok("the deploy routes the arena and the honeypot, and the honeypot paths land in it", !!vjs.functions["api/arena.js"] && !!vjs.functions["api/trap.js"] && ["/wp-login.php", "/.env", "/xmlrpc.php"].every(src => (vjs.rewrites || []).some(r => r.source === src && r.destination.startsWith("/api/trap"))));
+const wfDir = path.join(ROOT, ".github", "workflows"); const wfs = fs.readdirSync(wfDir).filter(f => /\.ya?ml$/.test(f)).map(f => [f, fs.readFileSync(path.join(wfDir, f), "utf8")]);
+const usesLines = wfs.flatMap(([f, t]) => t.split("\n").filter(l => /^\s*-?\s*uses:/.test(l)).map(l => f + ": " + l.trim()));
+C.ok("every workflow action is pinned to a commit, with its version noted", usesLines.length >= 9 && usesLines.every(l => /@[0-9a-f]{40} # v\d+\.\d+\.\d+$/.test(l)), usesLines.filter(l => !/@[0-9a-f]{40} # v/.test(l)).join(" | "));
+C.ok("every workflow runs with read-only repository permissions", wfs.every(([f, t]) => /\npermissions:\n\s+contents: read\n/.test(t) && !/contents:\s*write/.test(t)), wfs.filter(([f, t]) => !/permissions:\n\s+contents: read/.test(t)).map(([f]) => f).join(","));
+C.ok("Dependabot keeps actions and development packages current", /package-ecosystem: github-actions/.test(R(".github/dependabot.yml")) && /package-ecosystem: npm/.test(R(".github/dependabot.yml")));
+C.ok("the dependency watch runs daily and on lockfile changes", /cron:/.test(R(".github/workflows/depwatch.yml")) && /package-lock\.json/.test(R(".github/workflows/depwatch.yml")) && fs.existsSync(path.join(ROOT, "tools", "depwatch.mjs")));
 C.done();

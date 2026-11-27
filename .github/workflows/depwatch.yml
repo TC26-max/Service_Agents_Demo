@@ -1,0 +1,38 @@
+name: depwatch
+# v3.4 (Phase 3 of the November audit): every package in package-lock.json and every action these workflows
+# use, checked daily against OSV advisories, CVE records (the CNA's score first), CISA KEV and FIRST EPSS.
+# Known exploited fails; high severity or likely exploitation fails for what the site or this pipeline runs and
+# warns for development packages. The result is the job summary and the "deps" artifact; the badge in the
+# README is this workflow's own status. NVD_API_KEY (optional secret) speeds up the rare NVD lookups.
+on:
+  schedule:
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - package-lock.json
+      - ".github/workflows/**"
+      - tools/depwatch.mjs
+permissions:
+  contents: read
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Check dependencies
+        run: node tools/depwatch.mjs --out dist/deps
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+      - name: Summary
+        if: always()
+        run: if [ -f dist/deps/summary.md ]; then cat dist/deps/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: deps
+          path: dist/deps/
+          if-no-files-found: ignore

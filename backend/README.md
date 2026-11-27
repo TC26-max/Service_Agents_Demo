@@ -18,6 +18,10 @@ backend/
   lib/guard.mjs         guard layer: input cleaning, signed history, fenced passages, output rules
   lib/provider.mjs      provider presets, model-aware request bodies, the canary
   lib/project.mjs       PCA of the passage embeddings for the X-ray's map (deterministic, cached per instance)
+  api/arena.js          GET levels and scoreboard; POST one attempt at a level (v3.4, see below)
+  lib/arena.mjs         the arena's levels, canary, gates, judge and counts-only scoreboard
+  api/trap.js           the honeypot behind /wp-login.php, /.env and similar scanner paths; answers 404
+  lib/httpbl.mjs        optional Project Honey Pot http:BL lookup (HTTPBL_KEY), cached, IPv4 only
   personas/personas.json, personas/rules.json   the shipped prompts and the rules every prompt must contain
   kb.json               copied from ../kb.json at build (bundled into the chat function, not published)
   vercel.json           output directory, functions config, security headers (CSP pins the inline script hashes)
@@ -29,6 +33,10 @@ backend/
 
 - `timing`: `embedMs` (question and context embedded; `cold: true` when the 36 passages were embedded first, on a cold instance), `rankMs` (cosine, keyword ranking and fusion), and for answers `firstTokenMs` (streams), `generateMs`, `tokensOut` with `tokensEstimated` (true when the provider reported no usage and the count is characters divided by four) and, for JSON answers with usage, `tokensIn`. A stream sends the retrieval timings with its first event and the rest with its last.
 - `map` (retrieve only): `points` (36 `{cid, x, y}` in about -1 to 1), `query` (`{x, y}`, may fall outside that range) and `kept` (the share of the variance the two components keep). Edited passages are projected from their edited vectors. The map is a picture; ranking always uses the full vectors.
+
+## The Red Team Arena (v3.4)
+
+`POST /api/arena` with `{ level: 1..5, attack, edit? }` (edit: level 2's poisoned passage, at most 240 characters). One model call, on `ARENA_MODEL`, with the support persona behind an arena preamble, a canary that is new for every attempt, and keyword-ranked passages (no embedding call). The reply passes the arena's gates (R-CANARY, R-ACTION, the main output guard with no allowance for contacts the visitor typed, R-MARKUP, the arena's own contact check that also reads spelled-out addresses, R-LENGTH). The judge then checks the level's goal on the raw reply (`fooled`) and on the gated one (`won`). An attack over 1,500 characters gets 413 and counts as caught without a model call. The response carries `{ reply, verdict: { fooled, won, caught, gates, stage, note }, score }`; the log line carries the level, the verdict and the rule ids, never text.
 
 ## Environment
 

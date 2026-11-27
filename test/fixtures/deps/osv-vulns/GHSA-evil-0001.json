@@ -1,0 +1,10 @@
+{
+ "id": "GHSA-evil-0001",
+ "aliases": [
+  "CVE-2026-0001"
+ ],
+ "summary": "Remote code execution in evil-lib (fixture)",
+ "database_specific": {
+  "severity": "CRITICAL"
+ }
+}

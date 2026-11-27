@@ -1,0 +1,18 @@
+# v3.4: keeps the pinned workflow actions and the development packages current. Weekly, grouped, so the
+# pull requests stay few; each one runs the full gate suite before it can be merged.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development

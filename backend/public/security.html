@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Security · Grounded</title>
+<meta name="description" content="Threat model, headers, OWASP Top 10 for LLM Applications 2026, MITRE ATLAS and CIS Controls v8.1 coverage, and disclosure for the Grounded demo."/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<style>
+@font-face{font-family:"Archivo Grounded";src:url(/fonts/archivo-display.woff2) format("woff2");font-weight:600 800;font-stretch:75% 100%;font-display:swap}
+@font-face{font-family:"JetBrains Mono Grounded";src:url(/fonts/jetbrains-mono-500.woff2) format("woff2");font-weight:500;font-display:swap}
+:root{color-scheme:light dark;--bg:#f7f8fc;--panel:#fff;--ink:#0f172a;--muted:#475569;--line:#e2e6ef;--accent:#1d4ed8;--ok:#15803d;--warn:#b45309;--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--display:"Archivo Grounded",var(--font);--mono:"JetBrains Mono Grounded",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--panel:#111a2e;--ink:#e7edf7;--muted:#a8b5c8;--line:#24324d;--accent:#93b0ff;--ok:#34d399;--warn:#f5a623}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--font)}
+main{max-width:980px;margin:0 auto;padding:28px 20px 60px}
+a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+h1,h2{font-family:var(--display);font-stretch:85%;line-height:1.1;letter-spacing:-.2px}
+h1{font-size:40px;margin:14px 0 8px}h2{font-size:24px;margin:34px 0 10px}h3{font-size:15px;margin:18px 0 6px}
+.lede{font-size:17px;color:var(--muted);max-width:760px}
+.back{display:inline-block;font-size:14px;font-weight:600;min-height:44px;line-height:44px}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;margin:14px 0 6px}
+nav.toc a{min-height:44px;display:inline-flex;align-items:center}
+.wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+caption{text-align:left;padding:10px 12px;font-weight:600;color:var(--muted)}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-top:1px solid var(--line)}
+thead th{border-top:0;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+tbody th{font-weight:600;white-space:nowrap}
+code,.mono{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere}
+ul{padding-left:20px}li{margin:3px 0}
+.note{font-size:13px;color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px 16px}
+footer{margin-top:40px;font-size:13px;color:var(--muted)}
+@media(max-width:640px){h1{font-size:31px}tbody th{white-space:normal}}
+</style>
+</head>
+<body>
+<main id="main">
+<a class="back" href="/">Back to the demo</a>
+<h1>Security</h1>
+<p class="lede">Grounded is a public demo with no accounts, no database and no stored conversations, so the things worth protecting are the model provider's bill, the honesty of the answers, visitors' privacy and the site itself. This page sets out what can go wrong, what stops it, and where each control is tested.</p>
+<nav class="toc" aria-label="On this page"><a href="#threats">Threat model</a><a href="#headers">Headers</a><a href="#owasp">OWASP 2026</a><a href="#atlas">MITRE ATLAS</a><a href="#cis">CIS Controls</a><a href="#deps">Dependency watch</a><a href="#arena">Red Team Arena</a><a href="#disclosure">Disclosure</a><a href="#sources">Sources</a></nav>
+
+<h2 id="threats">Threat model</h2>
+<div class="wrap"><table><caption>What is worth protecting, what threatens it, and what stops it</caption><thead><tr><th scope="col">Asset</th><th scope="col">Risk</th><th scope="col">Controls</th></tr></thead><tbody>
+<tr><th scope="row">The provider key and its bill</th><td>Scripted traffic runs up the model provider's charges or exhausts the free quota for everyone.</td><td>Per-visitor and daily limits on every endpoint (N-01, N-11), input and output caps (N-09), a separate arena budget and kill switch, a limited deep health check. A platform firewall rule is the owner's step.</td></tr>
+<tr><th scope="row">Honest answers</th><td>An answer invents a policy, asks for a card number or sends people to an address that is not Nimbus's.</td><td>Answers come from cited passages or say the knowledge base has nothing; deterministic output rules (R-SECRET, R-CONTACT, R-CARD, R-IMAGE, R-STUDENT, R-PROMPT); signed history so earlier replies cannot be forged (N-08).</td></tr>
+<tr><th scope="row">Visitors' privacy</th><td>Something a visitor types is kept, logged or leaked.</td><td>No accounts and no storage of conversations or voice audio; logs keep counts and rule ids only; a privacy note says what goes to the model provider (N-03).</td></tr>
+<tr><th scope="row">The site itself</th><td>Injected script, framing, or server files served as pages.</td><td>A hash-pinned Content Security Policy, HSTS, same-origin opener and resource policies, X-Frame-Options; only the public folder is served (N-10).</td></tr>
+<tr><th scope="row">Hidden context</th><td>The instructions behind the assistants are read back.</td><td>Of little value by design: both prompts are published with the source. R-PROMPT declines recitation, and the arena guards a random canary.</td></tr>
+</tbody></table></div>
+<h3>Who might attack</h3><ul><li>A curious visitor, the expected case.</li><li>A prompt injector, who tries to make an assistant break its rules or leak its context.</li><li>A cost abuser or bot, who sends many requests to run up the bill.</li><li>A scanner, who asks for well-known admin paths; those land in a honeypot that answers like any missing page.</li><li>A researcher, who reports what they find (see Disclosure).</li></ul>
+<h3>Entry points</h3><ul><li>POST /api/chat: chat answers and the Retrieval X-ray (mode retrieve).</li><li>POST /api/transcribe: voice, behind a short-lived signed token.</li><li>POST /api/arena: the Red Team Arena, a sandboxed copy of the support bot with its own budget.</li><li>GET /api/health: status; the deep check calls the model at most a few times a day.</li><li>POST /api/csp-report: browser reports of blocked content, reduced to directive and origin.</li><li>Static files under /, from the public folder only.</li><li>Knowledge-base edits, which live in the visitor's tab and travel with each request, capped at 240 characters.</li></ul>
+<h3>Trust boundary</h3><p>Everything the browser sends is untrusted, including the conversation history, edited passages and the requested mode. The functions hold no state between requests beyond counters. The model provider is a third party that receives the system prompt, the retrieved passages and the visitor's message. The model's reply is untrusted until the output rules pass it, and the page prints it as text, never as HTML.</p>
+
+<h2 id="headers">Headers on every response</h2>
+<p>Generated by the build into <code>vercel.json</code> and read from the same place for this table. The script hashes in the policy pin the page's own inline scripts; nothing loads from another origin.</p>
+<div class="wrap"><table><caption>HTTP response headers</caption><thead><tr><th scope="col">Header</th><th scope="col">Value</th></tr></thead><tbody>
+<tr><th scope="row">Content-Security-Policy</th><td><span class="mono">default-src 'self'; script-src 'self' 'sha256-Bw8lTCdp3cbofU1JNOhsT1VDfrUGdHB2n8bmY6NppnA=' 'sha256-oO6ohd1i/8o4mFpWaGbH6/wqctcNn40jgffbNyRnXMo=' 'sha256-ElShUWg/R0NC6WIMZp3N2FKE5siI90ZKCnHMHJYcUhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report</span></td></tr>
+<tr><th scope="row">Strict-Transport-Security</th><td><span class="mono">max-age=63072000; includeSubDomains; preload</span></td></tr>
+<tr><th scope="row">X-Content-Type-Options</th><td><span class="mono">nosniff</span></td></tr>
+<tr><th scope="row">X-Frame-Options</th><td><span class="mono">DENY</span></td></tr>
+<tr><th scope="row">Referrer-Policy</th><td><span class="mono">strict-origin-when-cross-origin</span></td></tr>
+<tr><th scope="row">Permissions-Policy</th><td><span class="mono">microphone=(self), camera=(), geolocation=(), payment=()</span></td></tr>
+<tr><th scope="row">Cross-Origin-Opener-Policy</th><td><span class="mono">same-origin</span></td></tr>
+<tr><th scope="row">Cross-Origin-Resource-Policy</th><td><span class="mono">same-origin</span></td></tr>
+<tr><th scope="row">Cache-Control (on /api)</th><td><span class="mono">no-store</span></td></tr>
+</tbody></table></div>
+
+<h2 id="owasp">OWASP Top 10 for LLM Applications 2026</h2>
+<div class="wrap"><table><caption>All ten risks, how this demo handles each, and where it is tested</caption><thead><tr><th scope="col">Risk</th><th scope="col">Status</th><th scope="col">How</th><th scope="col">Tested</th></tr></thead><tbody>
+<tr><th scope="row">LLM01:2026 Prompt Injection</th><td>Defended in depth</td><td>Passages are fenced with a per-request code; text is NFKC-normalized and invisible characters are stripped (N-16); assistant turns carry a server signature (N-08); system-role messages from the browser are dropped (G-01); output rules catch what gets through.</td><td>Arena levels 1 and 2; live probes 3, 5, 7, 10, 11; both probe scripts.</td></tr>
+<tr><th scope="row">LLM02:2026 Sensitive Information Disclosure</th><td>Defended</td><td>Nothing personal is stored or retrievable; R-SECRET replaces any reply that asks for card numbers, passwords or codes; R-CARD removes card-shaped numbers.</td><td>N-02 probe; endpoint gate.</td></tr>
+<tr><th scope="row">LLM03:2026 Excessive Agency</th><td>Not applicable by design</td><td>The assistants have no tools and cannot act; tickets are labelled illustrative. The page flags replies that claim an action (G-05), and the arena's R-ACTION replaces refund claims.</td><td>Arena level 1; UI gate (claim guard).</td></tr>
+<tr><th scope="row">LLM04:2026 Supply Chain</th><td>Watched</td><td>The deployed functions have no npm runtime dependencies; fonts and icons are self-hosted and no third-party script loads; workflow actions are pinned to commit hashes; a daily dependency watch checks every package against OSV, CVE records, CISA KEV and FIRST EPSS.</td><td>Static gate (no third-party assets); dependency watch.</td></tr>
+<tr><th scope="row">LLM05:2026 Data and Model Poisoning</th><td>Defended</td><td>The knowledge base changes only through git. Visitor edits are session-only, capped, labelled VISITOR-EDITED, fenced, and answered only after a full check (N-02, G-03). Nothing is trained or fine-tuned on visitor data.</td><td>Arena level 2; N-02 probe.</td></tr>
+<tr><th scope="row">LLM06:2026 Unbounded Consumption</th><td>Defended</td><td>Limits per visitor and per day on every endpoint, input and output caps, a capped deep health check, the arena's own budget and kill switch.</td><td>Arena level 4; endpoint gate (limits, caps).</td></tr>
+<tr><th scope="row">LLM07:2026 Misinformation</th><td>Mitigated</td><td>Answers cite their passages or say the knowledge base has nothing; R-STUDENT corrects a known wrong answer (N-05); a retrieval gold set runs in CI; an optional faithfulness check exists behind a flag.</td><td>Retrieval eval; N-05 probe; live rerun of N-05 pending.</td></tr>
+<tr><th scope="row">LLM08:2026 Hidden Context Exposure</th><td>Defended</td><td>The prompts are public on purpose, so reading them back costs nothing; R-PROMPT declines recitation; the arena hides a fresh canary in every attempt and R-CANARY blocks it in any spelling.</td><td>Arena level 3; live probe 9; N-04.</td></tr>
+<tr><th scope="row">LLM09:2026 Vector and Embedding Weaknesses</th><td>Low exposure</td><td>One tenant and 36 public passages from one owner, so retrieval cannot cross users; edited passages are embedded for one request and never stored; the X-ray's map is a projection of the public corpus.</td><td>Endpoint gate (map, edits).</td></tr>
+<tr><th scope="row">LLM10:2026 Improper Output Handling</th><td>Defended</td><td>The page prints model output as text, never HTML; R-IMAGE and the arena's R-MARKUP remove images, links and HTML on the server; the Content Security Policy blocks inline and third-party scripts and images from other origins.</td><td>Arena level 5; live probe 8; UI gate.</td></tr>
+</tbody></table></div>
+<p class="note">Finding IDs (G-, N-) refer to the Tested page of the demo, which lists every finding with its fix and its gate.</p>
+
+<h2 id="atlas">MITRE ATLAS techniques</h2>
+<div class="wrap"><table><caption>Adversary techniques this demo is tested against</caption><thead><tr><th scope="col">Technique</th><th scope="col">Name</th><th scope="col">Where it is tested</th></tr></thead><tbody>
+<tr><th scope="row"><span class="mono">AML.T0051.000</span></th><td>LLM Prompt Injection: Direct</td><td>Arena level 1; live probes 4 and 7</td></tr>
+<tr><th scope="row"><span class="mono">AML.T0051.001</span></th><td>LLM Prompt Injection: Indirect</td><td>Arena level 2; live probes 10 and 11; N-02</td></tr>
+<tr><th scope="row"><span class="mono">AML.T0070</span></th><td>RAG Poisoning</td><td>Arena level 2 (session-only by design)</td></tr>
+<tr><th scope="row"><span class="mono">AML.T0068</span></th><td>LLM Prompt Obfuscation</td><td>Invisible-character stripping; live probe 5; N-16</td></tr>
+<tr><th scope="row"><span class="mono">AML.T0054</span></th><td>LLM Jailbreak</td><td>Persona rules and output gates; live probes 3 and 7</td></tr>
+<tr><th scope="row"><span class="mono">AML.T0056</span></th><td>Extract LLM System Prompt</td><td>Arena level 3; live probe 9; N-04</td></tr>
+<tr><th scope="row"><span class="mono">AML.T0077</span></th><td>LLM Response Rendering</td><td>Arena level 5; live probe 8; R-IMAGE</td></tr>
+<tr><th scope="row"><span class="mono">AML.T0034</span></th><td>Cost Harvesting</td><td>Arena level 4; limits and caps (N-01, N-09)</td></tr>
+<tr><th scope="row"><span class="mono">AML.T0029</span></th><td>Denial of AI Service</td><td>Limits on every endpoint; a platform firewall rule (owner step)</td></tr>
+</tbody></table></div>
+<p class="note">IDs checked against MITRE ATLAS and D3FEND technique pages in November 2026. ATLAS is revised every month, so IDs can move.</p>
+
+<h2 id="cis">CIS Critical Security Controls v8.1</h2>
+<div class="wrap"><table><caption>All 18 Controls, read for a serverless demo with no accounts</caption><thead><tr><th scope="col">Control</th><th scope="col">Status</th><th scope="col">How</th></tr></thead><tbody>
+<tr><th scope="row">1. Inventory and Control of Enterprise Assets</th><td>Partly</td><td>Serverless, so there are no machines to inventory. The assets (repository, Vercel project, model key, domain) are listed in DEPLOY-GUIDE.md.</td></tr>
+<tr><th scope="row">2. Inventory and Control of Software Assets</th><td>Yes</td><td>package-lock.json pins every package; the functions have none at runtime; the dependency watch lists them all daily.</td></tr>
+<tr><th scope="row">3. Data Protection</th><td>Yes</td><td>No personal data is collected or kept; logs hold counts only; the privacy note names what reaches the model provider.</td></tr>
+<tr><th scope="row">4. Secure Configuration of Enterprise Assets and Software</th><td>Yes</td><td>Security headers and a hash-pinned CSP come from the build and are checked by the static gate; server files are never served.</td></tr>
+<tr><th scope="row">5. Account Management</th><td>Owner step</td><td>The site has no accounts. Two-factor sign-in on the GitHub, Vercel and Google accounts is the owner's to keep.</td></tr>
+<tr><th scope="row">6. Access Control Management</th><td>Partly</td><td>Tokens and apps are scoped to this repository, and every workflow runs with read-only repository permissions.</td></tr>
+<tr><th scope="row">7. Continuous Vulnerability Management</th><td>Yes</td><td>A daily dependency watch (OSV advisories, CVE records with CNA scores first, CISA KEV, FIRST EPSS), two audits, a live red-team pass and the public arena.</td></tr>
+<tr><th scope="row">8. Audit Log Management</th><td>Partly</td><td>Platform logs keep counts and rule ids only: guard rules, arena verdicts, limiter warnings, honeypot hits, CSP reports. Retention is the platform's.</td></tr>
+<tr><th scope="row">9. Email and Web Browser Protections</th><td>Yes (web)</td><td>CSP with hashed scripts and no third-party scripts, HSTS with preload, X-Frame-Options DENY, same-origin opener and resource policies. There is no email.</td></tr>
+<tr><th scope="row">10. Malware Defenses</th><td>Partly</td><td>The only upload is voice audio: WAV only, checked by its first bytes, size-capped and never stored.</td></tr>
+<tr><th scope="row">11. Data Recovery</th><td>Yes</td><td>Everything lives in git, and any deploy can be rolled back on the platform.</td></tr>
+<tr><th scope="row">12. Network Infrastructure Management</th><td>Platform</td><td>Run by Vercel. A firewall rate-limit rule for /api is the owner's step.</td></tr>
+<tr><th scope="row">13. Network Monitoring and Defense</th><td>Partly</td><td>CSP violation reports, the daily model canary, fair-use limits, the optional Project Honey Pot signal and the honeypot paths.</td></tr>
+<tr><th scope="row">14. Security Awareness and Skills Training</th><td>Not applicable</td><td>A one-person project; the Tested page and this page explain the defenses to visitors.</td></tr>
+<tr><th scope="row">15. Service Provider Management</th><td>Yes</td><td>Two providers: Vercel (hosting and logs) and Google (the model, which receives the prompt, passages and message). Both are named in the privacy note.</td></tr>
+<tr><th scope="row">16. Application Software Security</th><td>Yes</td><td>Every change runs four gates, a retrieval eval, two probe scripts, Lighthouse and accessibility budgets; every finding gets an ID and a gate.</td></tr>
+<tr><th scope="row">17. Incident Response Management</th><td>Partly</td><td>SECURITY.md and security.txt for reports, kill switches (ARENA_ENABLED, the model variables), the daily canary and platform rollbacks.</td></tr>
+<tr><th scope="row">18. Penetration Testing</th><td>Yes</td><td>Two audits (September and November 2026), a live red-team pass of 16 probes, and the arena, open to anyone.</td></tr>
+</tbody></table></div>
+
+<h2 id="deps">Dependency watch</h2>
+<div class="card"><p>A scheduled workflow (<code>.github/workflows/depwatch.yml</code>) reads <code>package-lock.json</code> and the workflow files every day, asks the OSV database for known advisories, follows each to its CVE record (the CNA's score first), and checks the CISA Known Exploited Vulnerabilities catalog and FIRST's EPSS exploit-probability score. A known-exploited issue, or a high-severity or likely-exploited issue in anything the site or its pipeline runs, fails the workflow; the workflow's badge in the README shows the latest result, and each run's summary lists every advisory it found. The deployed functions themselves have no npm dependencies.</p>
+<p class="note">This product uses data from the NVD API but is not endorsed or certified by the NVD. The NVD is consulted only when a CVE record carries no score from its CNA or from CISA.</p></div>
+
+<h2 id="arena">Red Team Arena</h2>
+<p>Anyone can attack a sandboxed copy of the support assistant on <a href="/#arena">the Arena tab</a>: five levels mapped to the table above, each attempt judged twice by deterministic code, once on the model's raw reply and once on what reaches the screen. The scoreboard keeps counts only; nothing typed there is stored.</p>
+
+<h2 id="disclosure">Disclosure</h2>
+<div class="card"><p>Report security issues through GitHub's private vulnerability reporting: <a href="https://github.com/TC26-max/Service_Agents_Demo/security/advisories/new">open a private report</a>. The same address is in <a href="/.well-known/security.txt">security.txt</a>, and the full policy, with what is in scope and the safe harbor, is in <a href="https://github.com/TC26-max/Service_Agents_Demo/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+<p>Please do not load-test the live site or enter real personal or payment details. A win in the arena counts as a finding: send what you typed and when.</p></div>
+
+<h2 id="sources">Sources</h2>
+<ul><li><a href="https://genai.owasp.org/">OWASP Top 10 for LLM Applications 2026</a></li><li><a href="https://atlas.mitre.org/">MITRE ATLAS</a></li><li><a href="https://www.cisecurity.org/controls/cis-controls-list">CIS Critical Security Controls v8.1</a></li><li><a href="https://www.cve.org/">CVE Program</a></li><li><a href="https://nvd.nist.gov/">NIST National Vulnerability Database</a></li><li><a href="https://csrc.nist.gov/projects/security-content-automation-protocol/">NIST Security Content Automation Protocol (CVSS, CPE)</a></li><li><a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA Known Exploited Vulnerabilities catalog</a></li><li><a href="https://www.first.org/epss/">FIRST EPSS</a></li><li><a href="https://osv.dev/">OSV vulnerability database</a></li><li><a href="https://www.projecthoneypot.org/httpbl_api.php">Project Honey Pot http:BL</a></li><li><a href="https://owasp.org/projects/webgoat">OWASP WebGoat (training)</a></li><li><a href="https://www.cyberthreatalliance.org/">Cyber Threat Alliance</a></li></ul>
+
+<footer>Grounded v3.4.0 · page updated 2026-11-27 · a portfolio demo of a fictional company; privately built for demonstration and portfolio purposes only.</footer>
+</main>
+</body>
+</html>
