@@ -1,0 +1,5 @@
+Contact: https://github.com/TC26-max/Service_Agents_Demo/security/advisories/new
+Expires: 2027-11-26T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://nimbus-ai-demos.vercel.app/.well-known/security.txt
+Policy: https://github.com/TC26-max/Service_Agents_Demo/blob/main/SECURITY.md

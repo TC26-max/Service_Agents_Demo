@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Sitemap: https://nimbus-ai-demos.vercel.app/sitemap.xml

@@ -3,7 +3,8 @@
 // with the real handlers mounted and the provider mocked. Asserts from the visitor's side of the screen.
 // Falls back to jsdom for the DOM-logic checks when Chromium is unavailable (layout and CSP checks are skipped).
 import { startHarness, launchBrowser, STUB_INIT, wait, Check, ROOT } from "./lib.mjs";
-import path from "node:path"; import { pathToFileURL } from "node:url";
+import path from "node:path"; import fs from "node:fs"; import { pathToFileURL } from "node:url";
+const NFIND = JSON.parse(fs.readFileSync(path.join(ROOT, "findings.json"), "utf8")).findings.length;
 const C = new Check("gate-ui");
 const H = await startHarness({ port: 8812 }); const B = H.base;
 const browser = await launchBrowser();
@@ -19,11 +20,11 @@ if (browser) {
   // Boot under CSP, no console errors, health pill, hidden dead controls, credentials, version
   { const c = await realCtx(); const p = await c.newPage(); const errors = []; p.on("console", m => { if (m.type() === "error") errors.push(m.text()); }); p.on("pageerror", e => errors.push(String(e)));
     await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await wait(600);
-    const s = await p.evaluate(() => ({ title: document.title, pill: document.getElementById("status").textContent, gear: getComputedStyle(document.getElementById("gear")).display, rag: getComputedStyle(document.getElementById("ragLabel")).display, ver: document.getElementById("version").dataset.version, tabs: document.querySelectorAll("#viewseg button").length }));
+    const s = await p.evaluate(() => ({ title: document.title, pill: document.getElementById("status").textContent, dead: ["gear", "ragLabel", "ragToggle", "modal", "apikey"].filter(id => document.getElementById(id)).length, offsite: /api\.openai\.com|api\.anthropic\.com/.test(document.documentElement.innerHTML), ver: document.getElementById("version").dataset.version, tabs: document.querySelectorAll("#viewseg button").length }));
     C.ok("no console or CSP errors on boot", errors.length === 0, errors.slice(0, 2).join(" | "));
     C.ok("title has no dash", !/[\u2014\u2013]/.test(s.title));
     C.ok("health-driven pill shows live + version", /Live/.test(s.pill) && /v3\./.test(s.pill), s.pill);
-    C.ok("gear and RAG toggle hidden in backend mode", s.gear === "none" && s.rag === "none");
+    C.ok("N-20 bring-your-own-key controls and third-party model calls removed", s.dead === 0 && !s.offsite, `${s.dead} dead controls, offsite calls: ${s.offsite}`);
     C.ok("four tabs incl. Tested", s.tabs === 4);
     await p.evaluate(() => document.getElementById("enterBtn").click());
     const cred = await p.evaluate(() => (document.querySelector(".cred") || {}).textContent || "");
@@ -45,7 +46,7 @@ if (browser) {
     const x = await p.evaluate(() => ({ items: document.querySelectorAll("#xrayview .xitem").length, more: [...document.querySelectorAll("#xrayview button")].some(b => /Show all 36/.test(b.textContent)) }));
     C.ok("X-ray shows 10 with a fold to all 36", x.items === 10 && x.more, JSON.stringify(x));
     await p.goto(B + "/#tested"); await wait(400);
-    C.ok("Tested page renders 24 findings", await p.evaluate(() => document.querySelectorAll("#testedview .find").length) === 24);
+    C.ok(`Tested page renders all ${NFIND} findings`, await p.evaluate(() => document.querySelectorAll("#testedview .find").length) === NFIND);
     await c.close(); }
 
   // G-11 bot switch keeps the answer with the bot that asked (stub, slow reply)
@@ -84,7 +85,7 @@ if (browser) {
     const c = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme }); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn");
     if (scheme === "light") await p.evaluate(() => { document.getElementById("modeBtn") && localStorage.setItem("g-mode", "light"); document.documentElement.setAttribute("data-mode", "light"); });
     await p.evaluate(() => document.getElementById("enterBtn").click()); await wait(500);
-    const m = await p.evaluate(() => { const r = document.querySelector(".chatcard").getBoundingClientRect(); return { chatTop: Math.round(r.top), h: innerHeight, overflow: document.documentElement.scrollWidth > innerWidth + 2, tips: getComputedStyle(document.getElementById("tips")).display }; });
+    const m = await p.evaluate(() => { const r = document.querySelector(".chatcard").getBoundingClientRect(); return { chatTop: Math.round(r.top), h: innerHeight, overflow: document.documentElement.scrollWidth > innerWidth + 2, tips: document.getElementById("tips") ? getComputedStyle(document.getElementById("tips")).display : "none" }; });
     C.ok(`phone ${scheme}: chat visible in the first screen`, m.chatTop < m.h, `chat top ${m.chatTop} of ${m.h}`);
     C.ok(`phone ${scheme}: no horizontal overflow`, !m.overflow);
     C.ok(`phone ${scheme}: tips popup hidden`, m.tips === "none");
@@ -92,15 +93,67 @@ if (browser) {
     await c.close(); }
   { const c = await realCtx(); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await p.screenshot({ path: path.join(ROOT, "dist", "desktop-dark-cover.png") }).catch(() => {}); await p.evaluate(() => document.getElementById("enterBtn").click()); await wait(500); await p.screenshot({ path: path.join(ROOT, "dist", "desktop-dark.png") }).catch(() => {});
     await p.evaluate(() => { localStorage.setItem("g-mode", "light"); document.documentElement.setAttribute("data-mode", "light"); }); await wait(200); await p.screenshot({ path: path.join(ROOT, "dist", "desktop-light.png") }).catch(() => {}); await c.close(); }
+
+  // ---- v3.1, audit 2026-11-26 (Phase 0, Gate A) ----
+  const AXE = fs.readFileSync(path.join(ROOT, "node_modules/axe-core/axe.min.js"), "utf8");
+  const axeSerious = async p => { await p.addScriptTag({ content: AXE }); return p.evaluate(async () => (await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"], resultTypes: ["violations"] })).violations.filter(v => v.impact === "serious" || v.impact === "critical").map(v => v.id + "(" + v.nodes.length + ")")); };
+  for (const mode of ["dark", "light"]) {
+    const c = await browser.newContext({ viewport: { width: 1280, height: 860 }, bypassCSP: true }); await c.addInitScript(m => { try { localStorage.setItem("g-mode", m); } catch (e) {} }, mode);
+    const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await wait(400);
+    let v = await axeSerious(p); C.ok(`N-11/N-23 axe: no serious issues on the intro (${mode})`, v.length === 0, v.join(", "));
+    // N-12: Tab never leaves the intro while it shows
+    let escaped = 0; for (let i = 0; i < 12; i++) { await p.keyboard.press("Tab"); if (await p.evaluate(() => { const a = document.activeElement; return !!(a && a !== document.body && !a.closest("#cover")); })) escaped++; }
+    C.ok(`N-12 keyboard focus stays in the intro (${mode})`, escaped === 0, `${escaped} of 12 Tab presses landed behind it`);
+    await p.click("#enterBtn"); await wait(700);
+    C.ok(`N-12 page is interactive after entering, intro inert (${mode})`, await p.evaluate(() => !document.getElementById("app").inert && document.getElementById("cover").inert));
+    await p.fill("#input", "What is your refund policy?"); await p.click("#send"); await wait(1500);
+    for (const view of ["chat", "kb", "xray", "tested"]) {
+      if (view !== "chat") { await p.click(`#viewseg button[data-view="${view}"]`); await wait(400); }
+      if (view === "xray") { await p.fill("#xq", "my slack notifications stopped"); await p.click("#xgo"); await wait(900); }
+      v = await axeSerious(p); C.ok(`N-11/N-23 axe: no serious issues in ${view} (${mode})`, v.length === 0, v.join(", "));
+      if (view === "chat") {
+        C.ok(`N-03 privacy note visible under the composer (${mode})`, await p.evaluate(() => { const e = document.getElementById("privacy"); return !!e && e.offsetHeight > 0 && /Gemini/.test(e.textContent); }));
+        // N-12: the source drawer takes focus and gives it back
+        const d = await p.evaluate(async () => { const cite = document.querySelector("#chat .cite"); cite.focus(); cite.click(); await new Promise(r => setTimeout(r, 120));
+          const dr = document.getElementById("drawer"); const inside = dr.contains(document.activeElement); const appInert = document.getElementById("app").inert;
+          document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await new Promise(r => setTimeout(r, 60));
+          return { inside, appInert, role: dr.getAttribute("role"), label: document.getElementById("dClose").getAttribute("aria-label"), back: document.activeElement === cite, closedInert: dr.inert }; });
+        C.ok(`N-12 drawer is a labelled dialog that takes focus (${mode})`, d.role === "dialog" && d.inside && d.appInert && !!d.label, JSON.stringify(d));
+        C.ok(`N-12 closing the drawer returns focus to the citation (${mode})`, d.back && d.closedInert);
+      }
+    }
+    await c.close(); }
+  // N-17: a citation list such as [S1, S2] becomes two source buttons
+  { const c = await stubCtx(); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn");
+    const n = await p.evaluate(async () => { document.getElementById("enterBtn").click(); window.__replies.push("Refunds take 14 days [S1, S2] and invoices are monthly [S3]."); const i = document.getElementById("input"); i.value = "refund policy and invoices?"; document.getElementById("send").click(); await new Promise(r => setTimeout(r, 900));
+      const b = document.querySelector("#chat .row.bot:last-of-type .bubble"); return { cites: b.querySelectorAll(".cite").length, raw: /\[S\d/.test(b.textContent) }; });
+    C.ok("N-17 [S1, S2] renders as two citation buttons, no raw markers", n.cites === 3 && !n.raw, JSON.stringify(n));
+    await c.close(); }
+  // N-19: the intro's animation stops once the visitor is in
+  { const c = await realCtx(); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await p.click("#enterBtn"); await wait(700);
+    const flips = await p.evaluate(() => new Promise(res => { let n = 0; const mo = new MutationObserver(m => n += m.length); document.querySelectorAll("#pipe .ps").forEach(x => mo.observe(x, { attributes: true })); setTimeout(() => { mo.disconnect(); res(n); }, 2200); }));
+    C.ok("N-19 intro animation stops after entering", flips === 0, `${flips} class changes in 2.2 s`);
+    await c.close(); }
+  // N-14: phones keep the composer in the first screen; every control is at least 44 px
+  for (const vp of [{ width: 375, height: 667 }, { width: 390, height: 844 }, { width: 360, height: 740 }]) {
+    const c = await browser.newContext({ viewport: vp, isMobile: true, hasTouch: true, bypassCSP: true }); const p = await c.newPage(); await p.goto(B + "/"); await p.waitForSelector("#enterBtn"); await p.click("#enterBtn"); await wait(600);
+    const m = await p.evaluate(() => { const r = document.getElementById("composer").getBoundingClientRect();
+      const small = [...document.querySelectorAll("button,a,input,textarea,select,[role=button],summary")].filter(e => { const b = e.getBoundingClientRect(); return b.width && b.height && (b.width < 44 || b.height < 44) && e.offsetParent && !e.closest("#cover,[inert]") && !e.classList.contains("cite"); }).map(e => e.id || e.className || e.tagName);
+      return { bottom: Math.round(r.bottom), h: innerHeight, small, overflow: document.documentElement.scrollWidth > innerWidth }; });
+    C.ok(`N-14 ${vp.width}x${vp.height}: composer fully in the first screen`, m.bottom <= m.h, `bottom ${m.bottom} of ${m.h}`);
+    C.ok(`N-14 ${vp.width}x${vp.height}: no control under 44 px`, m.small.length === 0, m.small.slice(0, 6).join(", "));
+    C.ok(`N-14 ${vp.width}x${vp.height}: no horizontal overflow`, !m.overflow);
+    if (vp.width === 375) { const v = await axeSerious(p); C.ok("N-11/N-23 axe: no serious issues on a phone", v.length === 0, v.join(", ")); }
+    await c.close(); }
   await browser.close();
 } else {
   console.log("(Chromium unavailable: running the jsdom subset; layout and CSP checks skipped)");
   let JSDOM = null; try { ({ JSDOM } = await import("jsdom")); } catch { try { ({ JSDOM } = await import(pathToFileURL(path.join(ROOT, "node_modules/jsdom/lib/api.js")).href)); } catch { } }
   if (!JSDOM) { console.log("(jsdom unavailable too: UI gate skipped; install devDependencies)"); H.close(); C.done(); }
-  const html = (await import("node:fs")).readFileSync(path.join(ROOT, "backend/index.html"), "utf8");
+  const html = (await import("node:fs")).readFileSync(path.join(ROOT, "backend/public/index.html"), "utf8");
   const dom = new JSDOM(html, { url: "https://nimbus-ai-demos.vercel.app/", runScripts: "dangerously", pretendToBeVisual: true, beforeParse(w) { w.TextDecoder = TextDecoder; w.TextEncoder = TextEncoder; w.__replies = []; w.cowork = { askClaude: async () => w.__replies.shift() ?? "Default stub answer [S1]." }; w.fetch = async () => { throw new Error("no network in jsdom"); }; } });
   await wait(100); const d = dom.window.document;
-  C.ok("tested page has 24 findings", d.querySelectorAll("#testedview .find").length === 24);
+  C.ok(`tested page has all ${NFIND} findings`, d.querySelectorAll("#testedview .find").length === NFIND);
   C.ok("credentials card present", /owner@acme-co\.example/.test(d.body.textContent));
   C.ok("version stamp present", !!d.getElementById("version"));
 }
